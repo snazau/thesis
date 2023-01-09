@@ -1,6 +1,8 @@
 # Custom
-./data*
-./.idea
+**/data*/*
+**/temp/*
+**/logs/*
+**/.idea/*
 *.dat
 *.edf
 *.fif
