@@ -6,7 +6,7 @@ import custom_distribution
 import eeg_reader
 
 
-class SubjectDataset(torch.utils.data.Dataset):
+class SubjectRandomDataset(torch.utils.data.Dataset):
     def __init__(self, eeg_file_path, seizures, samples_num, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
         self.raw = eeg_reader.EEGReader.read_eeg(eeg_file_path)
         self.seizures = seizures
@@ -163,7 +163,7 @@ if __name__ == '__main__':
     subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
-    subject_dataset = SubjectDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10)
+    subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10)
     dataset_sample = subject_dataset[0]
     for key in dataset_sample.keys():
         print(f'dataset_sample[{key}] {dataset_sample[key].shape}')
