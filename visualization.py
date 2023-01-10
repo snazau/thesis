@@ -25,6 +25,8 @@ def plot_spectrum_averaged(power_spectrum, freqs):
 
     power_avg = np.mean(power_spectrum, axis=(0, 2))
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    axes[0].plot(freqs, power_avg, 'bo')
+    axes[0].loglog(freqs, power_avg, 'bo')
+    axes[0].set_title('loglog')
     axes[1].semilogy(freqs, power_avg, 'bo')
+    axes[1].set_title('semilogy')
     plt.show()
