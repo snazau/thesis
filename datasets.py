@@ -57,7 +57,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         # drop unnecessary channels
         if 'data1' in eeg_file_path:
             channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
-        elif 'data2' in subject_key:
+        elif 'data2' in eeg_file_path:
             channels_to_drop = ['EEG ECG', 'Value MKR+', 'EEG Fpz', 'EEG EMG']
         else:
             raise NotImplementedError
@@ -179,7 +179,7 @@ class SubjectSequentialDataset(object):
         # drop unnecessary channels
         if 'data1' in eeg_file_path:
             channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
-        elif 'data2' in subject_key:
+        elif 'data2' in eeg_file_path:
             channels_to_drop = ['EEG ECG', 'Value MKR+', 'EEG Fpz', 'EEG EMG']
         else:
             raise NotImplementedError
