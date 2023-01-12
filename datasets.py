@@ -167,7 +167,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         return sample
 
 
-class SubjectSequentialDataset(object):
+class SubjectSequentialDataset(torch.utils.data.Dataset):
     def __init__(self, eeg_file_path, seizures, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
         self.raw = eeg_reader.EEGReader.read_eeg(eeg_file_path)
         self.seizures = seizures
