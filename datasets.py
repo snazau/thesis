@@ -46,7 +46,8 @@ def generate_raw_samples(raw_eeg, sample_start_times, sample_duration):
 
 class SubjectRandomDataset(torch.utils.data.Dataset):
     def __init__(self, eeg_file_path, seizures, samples_num, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
-        self.raw = eeg_reader.EEGReader.read_eeg(eeg_file_path)
+        self.eeg_file_path = eeg_file_path
+        self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
         self.seizures = seizures
         self.samples_num = samples_num
         self.sample_duration = sample_duration
@@ -55,9 +56,9 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.transform = transform
 
         # drop unnecessary channels
-        if 'data1' in eeg_file_path:
+        if 'data1' in self.eeg_file_path:
             channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
-        elif 'data2' in eeg_file_path:
+        elif 'data2' in self.eeg_file_path:
             channels_to_drop = ['EEG ECG', 'Value MKR+', 'EEG Fpz', 'EEG EMG']
         else:
             raise NotImplementedError
@@ -107,13 +108,12 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
 
         # generate samples
         self.mask = np.random.uniform(size=self.samples_num) > 0.5
-        sample_start_times = self.mask * seizure_times + (1 - self.mask) * normal_times
+        self.sample_start_times = self.mask * seizure_times + (1 - self.mask) * normal_times
         # print(f'len(sample_start_times) = {len(sample_start_times)}')
-        # print(f'len(list(set(sample_start_times))) = {len(list(set(sample_start_times)))}')
         # sample_start_times[0] = 23860
 
         self.targets = self.mask.astype(np.int)
-        self.raw_samples = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
+        self.raw_samples = generate_raw_samples(self.raw, self.sample_start_times, self.sample_duration)
         self.freqs = np.arange(1, 40.01, 0.1)
         # print(f'self.raw_samples.shape = {self.raw_samples.shape}')
 
@@ -140,36 +140,33 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
                 freqs=self.freqs,
                 n_cycles=self.freqs,
                 output='power',
-                n_jobs=-1
+                n_jobs=1
             )
+            power_spectrum = np.log(power_spectrum)
 
-            # TODO: done normalization correctly
-            #  Support link: https://colab.research.google.com/github/enzokro/clck10/blob/master/_notebooks/2020-09-10-Normalizing-spectrograms-for-deep-learning.ipynb
-            if self.normalization == 'log':
-                power_spectrum = np.log(power_spectrum)
-            elif self.normalization == 'minmax':
+            if self.normalization == 'minmax':
                 power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
             elif self.normalization == 'meanstd':
                 power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
 
             sample_data = power_spectrum
-
-            import visualization
-            print(target)
-            visualization.plot_spectrum_averaged(power_spectrum[0], self.freqs)
         else:
             raise NotImplementedError
 
         sample = {
-            'data': sample_data,
+            'data': torch.from_numpy(sample_data).float(),
+            'raw': torch.from_numpy(raw_sample).float(),
             'target': target,
+            'start_time': self.sample_start_times[idx],
+            'eeg_file_path': self.eeg_file_path,
         }
         return sample
 
 
 class SubjectSequentialDataset(torch.utils.data.Dataset):
     def __init__(self, eeg_file_path, seizures, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
-        self.raw = eeg_reader.EEGReader.read_eeg(eeg_file_path)
+        self.eeg_file_path = eeg_file_path
+        self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
         self.seizures = seizures
         self.sample_duration = sample_duration
         self.data_type = data_type
@@ -177,9 +174,9 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         self.transform = transform
 
         # drop unnecessary channels
-        if 'data1' in eeg_file_path:
+        if 'data1' in self.eeg_file_path:
             channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
-        elif 'data2' in eeg_file_path:
+        elif 'data2' in self.eeg_file_path:
             channels_to_drop = ['EEG ECG', 'Value MKR+', 'EEG Fpz', 'EEG EMG']
         else:
             raise NotImplementedError
@@ -192,16 +189,16 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         time_start, time_end = self.raw.times.min(), self.raw.times.max()
 
         # get start time for samples
-        sample_start_times = [start_time for start_time in np.arange(time_start, time_end - self.sample_duration, self.sample_duration)]
+        self.sample_start_times = [start_time for start_time in np.arange(time_start, time_end - self.sample_duration, self.sample_duration)]
 
         # generate targets
         self.targets = np.array([
             1 if check_if_in_segments(start_time, self.seizures) or check_if_in_segments(start_time + self.sample_duration, self.seizures) else 0
-            for start_time in sample_start_times
+            for start_time in self.sample_start_times
         ])
 
         # generate raw samples
-        self.raw_samples = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
+        self.raw_samples = generate_raw_samples(self.raw, self.sample_start_times, self.sample_duration)
         self.freqs = np.arange(1, 40.01, 0.1)
 
     def __len__(self):
@@ -220,29 +217,25 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
                 freqs=self.freqs,
                 n_cycles=self.freqs,
                 output='power',
-                n_jobs=-1
+                n_jobs=1
             )
+            power_spectrum = np.log(power_spectrum)
 
-            # TODO: done normalization correctly
-            #  Support link: https://colab.research.google.com/github/enzokro/clck10/blob/master/_notebooks/2020-09-10-Normalizing-spectrograms-for-deep-learning.ipynb
-            if self.normalization == 'log':
-                power_spectrum = np.log(power_spectrum)
-            elif self.normalization == 'minmax':
+            if self.normalization == 'minmax':
                 power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
             elif self.normalization == 'meanstd':
                 power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
 
             sample_data = power_spectrum
-
-            import visualization
-            print(target)
-            visualization.plot_spectrum_averaged(power_spectrum[0], self.freqs)
         else:
             raise NotImplementedError
 
         sample = {
-            'data': sample_data,
+            'data': torch.from_numpy(sample_data).float(),
+            'raw': torch.from_numpy(raw_sample).float(),
             'target': target,
+            'start_time': self.sample_start_times[idx],
+            'eeg_file_path': self.eeg_file_path,
         }
         return sample
 
@@ -263,11 +256,15 @@ if __name__ == '__main__':
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
     # subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10)
-    # dataset_sample = subject_dataset[0]
-    # for key in dataset_sample.keys():
-    #     print(f'dataset_sample[{key}] {dataset_sample[key].size}')
-
     subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
-    dataset_sample = subject_dataset[0]
-    for key in dataset_sample.keys():
-        print(f'dataset_sample[{key}] {dataset_sample[key].size}')
+    for idx in range(1):
+        dataset_sample = subject_dataset[idx]
+        import visualization
+
+        print(dataset_sample['target'])
+        visualization.plot_spectrum_averaged(np.exp(dataset_sample['data'][0].cpu().numpy()), subject_dataset.freqs)
+        visualization.plot_spectrum_channels(dataset_sample['data'][0].cpu().numpy(), time_idx_from=0, time_idx_to=128 * 9)
+        for key in dataset_sample.keys():
+            print_value = dataset_sample[key].shape if hasattr(dataset_sample[key], "shape") and len(dataset_sample[key].shape) > 1 else dataset_sample[key]
+            print(f'dataset_sample[{key}] {print_value}')
+        print()
