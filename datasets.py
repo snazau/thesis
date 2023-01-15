@@ -154,8 +154,8 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             raise NotImplementedError
 
         sample = {
-            'data': torch.from_numpy(sample_data).float(),
-            'raw': torch.from_numpy(raw_sample).float(),
+            'data': torch.from_numpy(sample_data[0]).float(),
+            'raw': torch.from_numpy(raw_sample[0]).float(),
             'target': target,
             'start_time': self.sample_start_times[idx],
             'eeg_file_path': self.eeg_file_path,
@@ -231,8 +231,8 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             raise NotImplementedError
 
         sample = {
-            'data': torch.from_numpy(sample_data).float(),
-            'raw': torch.from_numpy(raw_sample).float(),
+            'data': torch.from_numpy(sample_data[0]).float(),
+            'raw': torch.from_numpy(raw_sample[0]).float(),
             'target': target,
             'start_time': self.sample_start_times[idx],
             'eeg_file_path': self.eeg_file_path,
@@ -262,8 +262,8 @@ if __name__ == '__main__':
         import visualization
 
         print(dataset_sample['target'])
-        visualization.plot_spectrum_averaged(np.exp(dataset_sample['data'][0].cpu().numpy()), subject_dataset.freqs)
-        visualization.plot_spectrum_channels(dataset_sample['data'][0].cpu().numpy(), time_idx_from=0, time_idx_to=128 * 9)
+        visualization.plot_spectrum_averaged(np.exp(dataset_sample['data'].cpu().numpy()), subject_dataset.freqs)
+        visualization.plot_spectrum_channels(dataset_sample['data'].cpu().numpy(), time_idx_from=0, time_idx_to=128 * 9)
         for key in dataset_sample.keys():
             print_value = dataset_sample[key].shape if hasattr(dataset_sample[key], "shape") and len(dataset_sample[key].shape) > 1 else dataset_sample[key]
             print(f'dataset_sample[{key}] {print_value}')
