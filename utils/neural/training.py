@@ -129,14 +129,8 @@ def calc_metrics(probs, labels):
 
 
 def save_checkpoint(save_path, epoch, config, model, losses, metrics):
-    save_dir = os.path.basename(save_path)
-    os.makedirs(save_dir, exist_ok=True)
-
     checkpoint = {
-        'run_description': config.run_description,
         'epoch': epoch,
-        'date': config.curr_date,
-        'description': config.run_description,
         'losses': losses,
         'metrics': metrics,
         'model': {
