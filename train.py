@@ -2,6 +2,7 @@ import numpy as np
 import os
 import torch
 from torch.utils.tensorboard import SummaryWriter
+import tqdm
 
 import utils.avg_meters
 import utils.neural.training
@@ -14,23 +15,25 @@ def train(strategy_name, strategy_params, loader, model, criterion, optimizer, e
     all_probs = np.array([])
 
     loss_avg_meter = utils.avg_meters.AverageMeter()
-    for batch_idx, sample in enumerate(loader):
-        inputs = sample["data"].to(device)
-        labels = sample["target"].to(device)
+    with tqdm.tqdm(loader) as tqdm_wrapper:
+        for batch_idx, sample in enumerate(tqdm_wrapper):
+            tqdm_wrapper.set_description(f'Epoch {epoch:03}')
 
-        optimizer.zero_grad()
-        outputs, loss = utils.neural.training.forward(strategy_name, strategy_params, model, inputs, labels, criterion)
-        loss.backward()
-        optimizer.step()
+            inputs = sample["data"].to(device)
+            labels = sample["target"].to(device)
 
-        loss_avg_meter.update(loss.item())
+            optimizer.zero_grad()
+            outputs, loss = utils.neural.training.forward(strategy_name, strategy_params, model, inputs, labels, criterion)
+            loss.backward()
+            optimizer.step()
 
-        probs = torch.sigmoid(outputs)
-        all_labels = np.concatenate([all_labels, labels.cpu().detach().numpy()])
-        all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
+            loss_avg_meter.update(loss.item())
 
-        print(f'\rProgress {batch_idx + 1}/{len(loader)} loss = {loss_avg_meter.avg:.5f}', end='')
-    print()
+            probs = torch.sigmoid(outputs)
+            all_labels = np.concatenate([all_labels, labels.cpu().detach().numpy()])
+            all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
+
+            tqdm_wrapper.set_postfix(loss=loss_avg_meter.avg)
 
     writer.add_scalar('loss/lr', optimizer.param_groups[0]["lr"], epoch)
     writer.add_scalar('loss/train', loss_avg_meter.avg, epoch)
@@ -48,21 +51,21 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
     all_probs = np.array([])
 
     loss_avg_meter = utils.avg_meters.AverageMeter()
-    for batch_idx, sample in enumerate(loader):
-        inputs = sample["data"].to(device)
-        labels = sample["target"].to(device)
+    with tqdm.tqdm(loader) as tqdm_wrapper:
+        for batch_idx, sample in enumerate(tqdm_wrapper):
+            inputs = sample["data"].to(device)
+            labels = sample["target"].to(device)
 
-        with torch.no_grad():
-            outputs, loss = utils.neural.training.forward('default', {}, model, inputs, labels, criterion)
-            probs = torch.sigmoid(outputs)
+            with torch.no_grad():
+                outputs, loss = utils.neural.training.forward('default', {}, model, inputs, labels, criterion)
+                probs = torch.sigmoid(outputs)
 
-        loss_avg_meter.update(loss.item())
+            loss_avg_meter.update(loss.item())
 
-        all_labels = np.concatenate([all_labels, labels.cpu().detach().numpy()])
-        all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
+            all_labels = np.concatenate([all_labels, labels.cpu().detach().numpy()])
+            all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
 
-        print(f'\rProgress {batch_idx + 1}/{len(loader)} loss = {loss_avg_meter.avg:.5f}', end='')
-    print()
+            tqdm_wrapper.set_postfix(loss=loss_avg_meter.avg)
 
     writer.add_scalar('loss/val', loss_avg_meter.avg, epoch)
     metrics = utils.neural.training.calc_metrics(all_probs, all_labels)
@@ -122,8 +125,9 @@ def run_training(config):
 
     # Train loop
     min_val_loss = 1e10
-    for epoch in range(config['epochs']):
-        print(f'training started e={epoch:03}')
+    epochs = config['epochs']
+    for epoch in range(epochs):
+        print(f'training started e={epoch:03}/{epochs:03}')
         loss_avg_train, metrics_train = train(
             config['strategy']['name'],
             config['strategy']['params'],
@@ -137,7 +141,7 @@ def run_training(config):
         )
         print(f'loss_avg_train = {loss_avg_train} metrics_train = {metrics_train}')
 
-        print(f'Validation started e={epoch:03}')
+        print(f'Validation started e={epoch:03}/{epochs:03}')
         loss_avg_val, metrics_val = validate(loader_val, model, criterion, optimizer, epoch, writer, device)
         print(f'loss_avg_val = {loss_avg_val} metrics_val = {metrics_val}')
 
@@ -158,7 +162,7 @@ def run_training(config):
             checkpoint_metrics,
         )
 
-        checkpoint_path = os.path.join(checkpoints_dir, f'last.pth.tar')
+        checkpoint_path = os.path.join(checkpoints_dir, 'last.pth.tar')
         utils.neural.training.save_checkpoint(
             checkpoint_path,
             epoch,
