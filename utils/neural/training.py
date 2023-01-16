@@ -98,6 +98,13 @@ def forward(strategy_name, strategy_kwargs, model, inputs, labels, criterion):
     return outputs, loss
 
 
+def calc_metric(function, labels, preds):
+    try:
+        return function(labels, preds)
+    except Exception as e:
+        return -1
+
+
 def calc_metrics(probs, labels):
     fpr, tpr, _ = sklearn.metrics.roc_curve(labels, probs)
     auc_roc = sklearn.metrics.auc(fpr, tpr)
@@ -106,11 +113,11 @@ def calc_metrics(probs, labels):
     auc_pr = sklearn.metrics.auc(recall_pr, precision_pr)
 
     preds = probs > 0.5
-    accuracy_combined = sklearn.metrics.accuracy_score(labels, preds)
-    f1_score = sklearn.metrics.f1_score(labels, preds)
-    precision = sklearn.metrics.precision_score(labels, preds)
-    recall = sklearn.metrics.recall_score(labels, preds)
-    cohen_kappa = sklearn.metrics.cohen_kappa_score(labels, preds)
+    accuracy_combined = calc_metric(sklearn.metrics.accuracy_score, labels, preds)
+    f1_score = calc_metric(sklearn.metrics.f1_score, labels, preds)
+    precision = calc_metric(sklearn.metrics.precision_score, labels, preds)
+    recall = calc_metric(sklearn.metrics.recall_score, labels, preds)
+    cohen_kappa = calc_metric(sklearn.metrics.cohen_kappa_score, labels, preds)
 
     accuracy_class = np.sum(labels[labels == 1] * preds[labels == 1]) / np.sum(labels)
 
