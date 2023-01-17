@@ -56,11 +56,11 @@ def get_scheduler(scheduler_name, scheduler_kwargs, optimizer):
     return scheduler
 
 
-def get_loader(data_dir, dataset_info_path, subject_keys, mode, dataset_kwargs, loader_kwargs):
+def get_datasets(data_dir, dataset_info_path, subject_keys, mode, dataset_kwargs):
     with open(dataset_info_path) as f:
         dataset_info = json.load(f)
 
-    datasets_to_merge = list()
+    datasets_list = list()
     for subject_key in subject_keys:
         subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
         subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
@@ -72,9 +72,12 @@ def get_loader(data_dir, dataset_info_path, subject_keys, mode, dataset_kwargs, 
         else:
             raise NotImplementedError
 
-        datasets_to_merge.append(subject_dataset)
+        datasets_list.append(subject_dataset)
+    return datasets_list
 
-    dataset_merged = torch.utils.data.ConcatDataset(datasets_to_merge)
+
+def get_loader(datasets_list, loader_kwargs):
+    dataset_merged = torch.utils.data.ConcatDataset(datasets_list)
     loader = torch.utils.data.DataLoader(dataset_merged, **loader_kwargs)
     return loader
 
@@ -111,6 +114,20 @@ def calc_metrics(probs, labels):
 
     precision_pr, recall_pr, _ = sklearn.metrics.precision_recall_curve(labels, probs)
     auc_pr = sklearn.metrics.auc(recall_pr, precision_pr)
+
+    # metric_dict = {'auc_roc': {'auc_roc': auc_roc}, 'auc_pr': {'auc_pr': auc_pr}}
+    # metric_names = ['accuracy_score', 'f1_score', 'precision_score', 'recall_score', 'cohen_kappa_score']
+    # thresholds = [0.01] + list(np.arange(0.05, 0.99, 0.05)) + [0.99]
+    # for threshold in thresholds:
+    #     preds = probs > threshold
+    #     for metric_name in metric_names:
+    #         # metric_value = getattr(sklearn.metrics, metric_name)(labels, preds)
+    #         metric_value = calc_metric(getattr(sklearn.metrics, metric_name), labels, preds)
+    #
+    #         if metric_name not in metric_dict:
+    #             metric_dict[metric_name] = dict()
+    #         # metric_dict[metric_name][f'{metric_name}_{threshold * 100:03}'] = metric_value
+    #         metric_dict[metric_name][f'{int(threshold * 100):02}'] = metric_value
 
     preds = probs > 0.5
     accuracy_combined = calc_metric(sklearn.metrics.accuracy_score, labels, preds)
