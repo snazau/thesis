@@ -8,8 +8,6 @@ import eeg_reader
 
 mne.set_log_level('error')
 
-# TODO: move code duplication into separate functions
-
 
 def check_if_in_segments(time_point, segments):
     return any([segment['start'] <= time_point <= segment['end'] for segment in segments])
@@ -96,27 +94,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         # print(f'seizures = {self.seizures}')
         # print(f'normal_segments = {self.normal_segments}')
 
-        # get start time for samples
-        seizure_times = custom_distribution.unifrom_segments_sample(size=self.samples_num, segments=self.seizures)
-        assert all([
-            any([seizure['start'] < seizure_time < seizure['end'] for seizure in self.seizures])
-            for seizure_time in seizure_times
-        ])
-
-        normal_times = custom_distribution.unifrom_segments_sample(size=self.samples_num, segments=self.normal_segments)
-        assert all([
-            any([normal_segment['start'] < normal_time < normal_segment['end'] for normal_segment in self.normal_segments])
-            for normal_time in normal_times
-        ])
-
-        # generate samples
-        self.mask = np.random.uniform(size=self.samples_num) > 0.5
-        self.sample_start_times = self.mask * seizure_times + (1 - self.mask) * normal_times
-        # print(f'len(sample_start_times) = {len(sample_start_times)}')
-        # sample_start_times[0] = 23860
-
-        self.targets = self.mask.astype(np.int)
-        self.raw_samples = generate_raw_samples(self.raw, self.sample_start_times, self.sample_duration)
+        self.mask, self.sample_start_times, self.targets, self.raw_samples = self._generate_data()
         self.freqs = np.arange(1, 40.01, 0.1)
         # print(f'self.raw_samples.shape = {self.raw_samples.shape}')
 
@@ -164,6 +142,41 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             'eeg_file_path': self.eeg_file_path,
         }
         return sample
+
+    def _generate_data(self):
+        # get start time for samples
+        seizure_times = custom_distribution.unifrom_segments_sample(size=self.samples_num, segments=self.seizures)
+        assert all(
+            [
+                any([seizure['start'] < seizure_time < seizure['end'] for seizure in self.seizures])
+                for seizure_time in seizure_times
+            ]
+        )
+
+        normal_times = custom_distribution.unifrom_segments_sample(size=self.samples_num, segments=self.normal_segments)
+        assert all(
+            [
+                any(
+                    [normal_segment['start'] < normal_time < normal_segment['end'] for normal_segment in
+                     self.normal_segments]
+                )
+                for normal_time in normal_times
+            ]
+        )
+
+        # generate samples
+        mask = np.random.uniform(size=self.samples_num) > 0.5
+        sample_start_times = mask * seizure_times + (1 - mask) * normal_times
+        # print(f'len(sample_start_times) = {len(sample_start_times)}')
+        # sample_start_times[0] = 23860
+
+        targets = mask.astype(np.int)
+        raw_samples = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
+
+        return mask, sample_start_times, targets, raw_samples
+
+    def renew_data(self):
+        self.mask, self.sample_start_times, self.targets, self.raw_samples = self._generate_data()
 
 
 class SubjectSequentialDataset(torch.utils.data.Dataset):
@@ -243,7 +256,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         return sample
 
 
-def custom_collate_function(batch, data_type, normalization, freqs=np.arange(1, 40.01, 0.1), sfreq=128):
+def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
         raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
@@ -287,7 +300,44 @@ if __name__ == '__main__':
     subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
-    # subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10)
+    import time
+    import utils.neural.training
+    device = torch.device('cuda:0')
+    model = utils.neural.training.get_model(model_name='resnet18', model_kwargs={'pretrained': True}).to(device)
+    model.eval()
+
+    subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10)
+    # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
+    loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16)
+    torch.cuda.synchronize()
+    time_start = time.time()
+    for batch_idx, batch in enumerate(loader):
+        with torch.no_grad():
+            output = model(batch['data'].to(device))
+        print(f'\rProgress {batch_idx + 1}/{len(loader)}', end='')
+        if batch_idx > 20:
+            break
+    torch.cuda.synchronize()
+    time_elapsed = time.time() - time_start
+    print(f'\ntime_elapsed = {time_elapsed}')
+
+    subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, data_type='raw')
+    # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10, data_type='raw')
+    from functools import partial
+    collate_fn = partial(custom_collate_function, data_type='power_spectrum', normalization=None)
+    loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16, collate_fn=collate_fn)
+    torch.cuda.synchronize()
+    time_start = time.time()
+    for batch_idx, batch in enumerate(loader):
+        with torch.no_grad():
+            output = model(batch['data'].to(device))
+        print(f'\rProgress {batch_idx + 1}/{len(loader)}', end='')
+        if batch_idx > 20:
+            break
+    torch.cuda.synchronize()
+    time_elapsed = time.time() - time_start
+    print(f'\ntime_elapsed = {time_elapsed}')
+
     subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
     for idx in range(1):
         dataset_sample = subject_dataset[idx]
