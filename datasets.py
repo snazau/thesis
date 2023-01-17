@@ -1,9 +1,12 @@
 import mne
 import numpy as np
 import torch
+from torch.utils.data._utils import collate
 
 import custom_distribution
 import eeg_reader
+
+mne.set_log_level('error')
 
 # TODO: move code duplication into separate functions
 
@@ -238,6 +241,35 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             'eeg_file_path': self.eeg_file_path,
         }
         return sample
+
+
+def custom_collate_function(batch, data_type, normalization, freqs=np.arange(1, 40.01, 0.1), sfreq=128):
+    if data_type == 'power_spectrum':
+        # wavelet (morlet) transform
+        raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
+        power_spectrum = mne.time_frequency.tfr_array_morlet(
+            raw_data.numpy(),
+            sfreq=sfreq,
+            freqs=freqs,
+            n_cycles=freqs,
+            output='power',
+            n_jobs=-1
+        )
+        power_spectrum = np.log(power_spectrum)
+
+        if normalization == 'minmax':
+            power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
+        elif normalization == 'meanstd':
+            power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
+
+        for sample_idx in range(power_spectrum.shape[0]):
+            batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx]).float()
+            # batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx])
+        # batch['data'] = torch.from_numpy(sample_data).float()
+
+        batch = torch.utils.data.dataloader.default_collate(batch)
+
+    return batch
 
 
 if __name__ == '__main__':
