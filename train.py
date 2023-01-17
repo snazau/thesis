@@ -35,11 +35,14 @@ def train(strategy_name, strategy_params, loader, model, criterion, optimizer, e
 
             tqdm_wrapper.set_postfix(loss=loss_avg_meter.avg)
 
-    writer.add_scalar('loss/lr', optimizer.param_groups[0]["lr"], epoch)
+    writer.add_scalar('lr/train', optimizer.param_groups[0]["lr"], epoch)
     writer.add_scalar('loss/train', loss_avg_meter.avg, epoch)
     metrics = utils.neural.training.calc_metrics(all_probs, all_labels)
     for metric_name, metric_value in metrics.items():
         writer.add_scalar(f'{metric_name}/train', metric_value, epoch)
+    # for metric_name, metric_dict in metrics.items():
+    #     for threshold_str, metric_value in metric_dict.items():
+    #         writer.add_scalar(f'{metric_name}/{threshold_str}/train', metric_value, epoch)
 
     return loss_avg_meter.avg, metrics
 
@@ -71,6 +74,9 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
     metrics = utils.neural.training.calc_metrics(all_probs, all_labels)
     for metric_name, metric_value in metrics.items():
         writer.add_scalar(f'{metric_name}/val', metric_value, epoch)
+    # for metric_name, metric_dict in metrics.items():
+    #     for threshold_str, metric_value in metric_dict.items():
+    #         writer.add_scalar(f'{metric_name}/{threshold_str}/val', metric_value, epoch)
 
     return loss_avg_meter.avg, metrics
 
@@ -87,26 +93,27 @@ def run_training(config):
     # Init worker
     writer = SummaryWriter(os.path.join(run_dir, 'tb_logs'))
 
-    # Data
-    loader_train = utils.neural.training.get_loader(
+    # Data val
+    datasets_train = utils.neural.training.get_datasets(
         config['data']['data_dir'],
         config['data']['dataset_info_path'],
         config['data']['train']['subject_keys'],
         mode='train',
         dataset_kwargs=config['data']['train']['dataset_params'],
-        loader_kwargs=config['data']['train']['loader_params'],
     )
 
-    loader_val = utils.neural.training.get_loader(
+    datasets_val = utils.neural.training.get_datasets(
         config['data']['data_dir'],
         config['data']['dataset_info_path'],
         config['data']['val']['subject_keys'],
         mode='val',
         dataset_kwargs=config['data']['val']['dataset_params'],
+    )
+    loader_val = utils.neural.training.get_loader(
+        datasets_val,
         loader_kwargs=config['data']['val']['loader_params'],
     )
 
-    print(f'len(loader_train) = {len(loader_train)}')
     print(f'len(loader_val) = {len(loader_val)}')
     print()
 
@@ -127,6 +134,14 @@ def run_training(config):
     min_val_loss = 1e10
     epochs = config['epochs']
     for epoch in range(epochs):
+        print('Renewing training raw data')
+        for dataset_idx in range(len(datasets_train)):
+            datasets_train[dataset_idx].renew_data()
+        loader_train = utils.neural.training.get_loader(
+            datasets_train,
+            loader_kwargs=config['data']['train']['loader_params'],
+        )
+
         print(f'training started e={epoch:03}/{epochs:03}')
         loss_avg_train, metrics_train = train(
             config['strategy']['name'],
@@ -192,6 +207,8 @@ def run_training(config):
 
 
 if __name__ == "__main__":
+    import datasets
+
     config = {
         'run_dir': 'D:\\Study\\asp\\thesis\\implementation\\experiments\\test_run\\',
         'device': 'cuda:0',
@@ -214,10 +231,12 @@ if __name__ == "__main__":
                 'dataset_params': {
                     'samples_num': 100,
                     'sample_duration': 10,
+                    'data_type': 'raw',
                 },
                 'loader_params': {
                     'batch_size': 4,
                     'shuffle': True,
+                    'collate_fn': datasets.custom_collate_function,
                 },
             },
             'val': {
@@ -227,10 +246,12 @@ if __name__ == "__main__":
                 ],
                 'dataset_params': {
                     'sample_duration': 10,
+                    'data_type': 'raw',
                 },
                 'loader_params': {
                     'batch_size': 4,
                     'shuffle': False,
+                    'collate_fn': datasets.custom_collate_function,
                 },
             },
         },
