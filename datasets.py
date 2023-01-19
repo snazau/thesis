@@ -56,6 +56,11 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.normalization = normalization
         self.transform = transform
 
+        # trim last seizure
+        if self.seizures[-1]['end'] + self.sample_duration >= self.raw.times.max():
+            print('Trimming last seizure')
+            self.seizures[-1]['end'] = self.raw.times.max() - self.sample_duration - 1e-3
+
         # drop unnecessary channels
         if 'data1' in self.eeg_file_path:
             channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
@@ -188,6 +193,11 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         self.data_type = data_type
         self.normalization = normalization
         self.transform = transform
+
+        # trim last seizure
+        if self.seizures[-1]['end'] + self.sample_duration >= self.raw.times.max():
+            print('Trimming last seizure')
+            self.seizures[-1]['end'] = self.raw.times.max() - self.sample_duration - 1e-3
 
         # drop unnecessary channels
         if 'data1' in self.eeg_file_path:
