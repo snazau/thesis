@@ -16,8 +16,8 @@ class SpecAugment:
         self.replace_with_zero = replace_with_zero
 
     def __call__(self, sample):
-        data = sample['data']
         if random.random() < self.p_aug:
+            data = sample['data']
             data = self.freq_mask(data)
             data = self.time_mask(data)
             sample['data'] = data
