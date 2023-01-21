@@ -130,14 +130,14 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             )
             power_spectrum = np.log(power_spectrum)
 
-            if self.normalization == 'minmax':
-                power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
-            elif self.normalization == 'meanstd':
-                power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
-
             sample_data = power_spectrum
         else:
             raise NotImplementedError
+
+        if self.normalization == 'minmax':
+            sample_data = (sample_data - sample_data.min()) / (sample_data.max() - sample_data.min())
+        elif self.normalization == 'meanstd':
+            sample_data = (sample_data - sample_data.mean()) / sample_data.std()
 
         sample = {
             'data': torch.from_numpy(sample_data[0]).float(),
@@ -247,14 +247,14 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             )
             power_spectrum = np.log(power_spectrum)
 
-            if self.normalization == 'minmax':
-                power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
-            elif self.normalization == 'meanstd':
-                power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
-
             sample_data = power_spectrum
         else:
             raise NotImplementedError
+
+        if self.normalization == 'minmax':
+            sample_data = (sample_data - sample_data.min()) / (sample_data.max() - sample_data.min())
+        elif self.normalization == 'meanstd':
+            sample_data = (sample_data - sample_data.mean()) / sample_data.std()
 
         sample = {
             'data': torch.from_numpy(sample_data[0]).float(),
