@@ -37,6 +37,19 @@ def get_model(model_name, model_kwargs):
             torch.nn.ReLU(),
             torch.nn.Linear(64, 1),
         )
+    elif model_name == 'resnet18_1channel':
+        model = torchvision.models.resnet18(**model_kwargs)
+
+        conv1_pretrained_weight = model.conv1.weight
+        model.conv1 = torch.nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        conv1_weight = torch.mean(conv1_pretrained_weight, dim=1, keepdim=True)
+        model.conv1.weight = torch.nn.parameter.Parameter(conv1_weight, requires_grad=True)
+
+        model.fc = torch.nn.Sequential(
+            torch.nn.Linear(512, 64),
+            torch.nn.ReLU(),
+            torch.nn.Linear(64, 1),
+        )
     else:
         raise NotImplementedError
 
