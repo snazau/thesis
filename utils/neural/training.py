@@ -69,7 +69,7 @@ def get_scheduler(scheduler_name, scheduler_kwargs, optimizer):
     return scheduler
 
 
-def get_datasets(data_dir, dataset_info_path, subject_keys, mode, dataset_kwargs):
+def get_datasets(data_dir, dataset_info_path, subject_keys, dataset_class_name, dataset_kwargs):
     with open(dataset_info_path) as f:
         dataset_info = json.load(f)
 
@@ -78,12 +78,7 @@ def get_datasets(data_dir, dataset_info_path, subject_keys, mode, dataset_kwargs
         subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
         subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
-        if mode == 'train':
-            subject_dataset = datasets.SubjectRandomDataset(subject_eeg_path, subject_seizures, **dataset_kwargs)
-        elif mode == 'val':
-            subject_dataset = datasets.SubjectSequentialDataset(subject_eeg_path, subject_seizures, **dataset_kwargs)
-        else:
-            raise NotImplementedError
+        subject_dataset = getattr(datasets, dataset_class_name)(subject_eeg_path, subject_seizures, **dataset_kwargs)
 
         datasets_list.append(subject_dataset)
     return datasets_list
