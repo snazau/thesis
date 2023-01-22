@@ -73,11 +73,18 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         channels_to_drop = channels_to_drop[:2 + (channels_num - 27)]
         self.raw.drop_channels(channels_to_drop)
 
+        self.channel_name_to_idx = {
+            channel_name.replace('EEG ', ''): channel_idx for channel_idx, channel_name in enumerate(self.raw.info['ch_names'])
+        }
+
         # set montage
         # print(self.raw.get_data().min(), self.raw.get_data().mean(), self.raw.get_data().max())
         # montage = mne.channels.make_standard_montage('standard_1020')
         # self.raw.set_montage(montage, on_missing='ignore', match_alias={ch: ch.replace('EEG ', '').strip() for ch in self.raw.info['ch_names']})
         # self.raw.plot_sensors(kind='topomap');
+        # import matplotlib.pyplot as plt
+        # plt.show()
+        # exit()
 
         # generate normal_segments using seizures and time limits of eeg file
         time_start, time_end = self.raw.times.min(), self.raw.times.max()
@@ -145,6 +152,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             'target': target,
             'start_time': self.sample_start_times[idx],
             'eeg_file_path': self.eeg_file_path,
+            'channel_name_to_idx': self.channel_name_to_idx,
         }
         return sample
 
@@ -211,6 +219,11 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         channels_to_drop = channels_to_drop[:2 + (channels_num - 27)]
         self.raw.drop_channels(channels_to_drop)
 
+        self.channel_name_to_idx = {
+            channel_name.replace('EEG ', ''): channel_idx for channel_idx, channel_name in
+            enumerate(self.raw.info['ch_names'])
+        }
+
         # get time limits of eeg file in seconds
         time_start, time_end = self.raw.times.min(), self.raw.times.max()
 
@@ -262,6 +275,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             'target': target,
             'start_time': self.sample_start_times[idx],
             'eeg_file_path': self.eeg_file_path,
+            'channel_name_to_idx': self.channel_name_to_idx,
         }
         return sample
 
