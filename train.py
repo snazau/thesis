@@ -1,5 +1,7 @@
-import numpy as np
+import gc
 import os
+
+import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 import tqdm
@@ -155,6 +157,7 @@ def run_training(config):
             device,
         )
         print(f'loss_avg_train = {loss_avg_train} metrics_train = {metrics_train}')
+        gc.collect()
 
         print(f'Validation started e={epoch:03}/{epochs:03}')
         loss_avg_val, metrics_val = validate(loader_val, model, criterion, optimizer, epoch, writer, device)
