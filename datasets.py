@@ -280,7 +280,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         return sample
 
 
-def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128):
+def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, transform=None):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
         raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
@@ -301,6 +301,8 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
 
         for sample_idx in range(power_spectrum.shape[0]):
             batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx]).float()
+            if transform is not None:
+                batch[sample_idx] = transform(batch[sample_idx])
             # batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx])
         # batch['data'] = torch.from_numpy(sample_data).float()
 
