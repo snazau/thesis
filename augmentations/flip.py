@@ -52,7 +52,7 @@ class EEGChannelsFlip:
                 sample['data'][channel_idx_one] = sample['data'][channel_idx_two]
                 sample['data'][channel_idx_two] = channel_temp
 
-                print(f'swapped channel_idx_one = {channel_idx_one} ({channel_name_one}) channel_idx_two = {channel_idx_two} ({channel_name_two})')
+                # print(f'swapped channel_idx_one = {channel_idx_one} ({channel_name_one}) channel_idx_two = {channel_idx_two} ({channel_name_two})')
         return sample
 
 
