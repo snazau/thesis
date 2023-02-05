@@ -22,6 +22,7 @@ if __name__ == '__main__':
     }
 
     # extract targets & filenames_to_exclude
+    subject_name_to_id = dict()
     subjects_info = dict()
     for subset_name in subsets_info.keys():
         print(f'Prosessing {subset_name}')
@@ -29,6 +30,7 @@ if __name__ == '__main__':
         for filename_idx, filename in enumerate(natsort.os_sorted(os.listdir(subset_dir))):
             subject_id = filename_idx + 1
             subject_name = os.path.splitext(filename)[0]
+            subject_name_to_id[subject_name] = subject_id
             if subject_id in subsets_info[subset_name]['ids_to_exclude']:
                 subsets_info[subset_name]['filenames_to_exclude'].append(subject_name)
                 print(f'Skipping {subset_name}/{subject_name}')
@@ -41,6 +43,10 @@ if __name__ == '__main__':
             }
         print()
     print()
+
+    subject_name_to_id_path = os.path.join(data_dir, 'subject_name_to_id.json')
+    with open(subject_name_to_id_path, 'w') as fp:
+        json.dump(subject_name_to_id, fp)
 
     # get eeg duration in seconds
     for subject_idx, subject_key in enumerate(subjects_info.keys()):
