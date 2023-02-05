@@ -68,6 +68,6 @@ class MetricMeter(object):
         output_str = []
         for name, meter in self.meters.items():
             output_str.append(
-                '{} {:.4f} ({:.4f})'.format(name, meter.val, meter.avg)
+                '{} = {:10.4f}'.format(name, meter.avg)
             )
         return self.delimiter.join(output_str)
