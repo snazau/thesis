@@ -94,9 +94,9 @@ def forward(strategy_name, strategy_kwargs, model, inputs, labels, criterion):
     if strategy_name == 'mixup':
         mixed_inputs, labels, labels_shuffled, lam = utils.neural.mixing.mixup(inputs, labels, **strategy_kwargs)
         outputs = model(mixed_inputs)
-        loss = lam * criterion(outputs, labels.unsqueeze(1)) + (1 - lam) * criterion(
+        loss = lam * criterion(outputs, labels.float().unsqueeze(1)) + (1 - lam) * criterion(
             outputs,
-            labels_shuffled.unsqueeze(1)
+            labels_shuffled.float().unsqueeze(1)
         )
     elif strategy_name == 'fmix':
         raise NotImplementedError
@@ -116,28 +116,38 @@ def calc_metric(function, labels, preds):
         return -1
 
 
-def calc_metrics(probs, labels):
+def calc_metrics_diff_thresholds(probs, labels):
     fpr, tpr, _ = sklearn.metrics.roc_curve(labels, probs)
     auc_roc = sklearn.metrics.auc(fpr, tpr)
 
     precision_pr, recall_pr, _ = sklearn.metrics.precision_recall_curve(labels, probs)
     auc_pr = sklearn.metrics.auc(recall_pr, precision_pr)
 
-    # metric_dict = {'auc_roc': {'auc_roc': auc_roc}, 'auc_pr': {'auc_pr': auc_pr}}
-    # metric_names = ['accuracy_score', 'f1_score', 'precision_score', 'recall_score', 'cohen_kappa_score']
-    # thresholds = [0.01] + list(np.arange(0.05, 0.99, 0.05)) + [0.99]
-    # for threshold in thresholds:
-    #     preds = probs > threshold
-    #     for metric_name in metric_names:
-    #         # metric_value = getattr(sklearn.metrics, metric_name)(labels, preds)
-    #         metric_value = calc_metric(getattr(sklearn.metrics, metric_name), labels, preds)
-    #
-    #         if metric_name not in metric_dict:
-    #             metric_dict[metric_name] = dict()
-    #         # metric_dict[metric_name][f'{metric_name}_{threshold * 100:03}'] = metric_value
-    #         metric_dict[metric_name][f'{int(threshold * 100):02}'] = metric_value
+    metric_dict = {'auc_roc': {'auc_roc': auc_roc}, 'auc_pr': {'auc_pr': auc_pr}}
+    metric_names = ['accuracy_score', 'f1_score', 'precision_score', 'recall_score', 'cohen_kappa_score']
+    thresholds = [0.01] + list(np.arange(0.05, 0.99, 0.05)) + [0.99]
+    for threshold in thresholds:
+        preds = probs > threshold
+        for metric_name in metric_names:
+            # metric_value = getattr(sklearn.metrics, metric_name)(labels, preds)
+            metric_value = calc_metric(getattr(sklearn.metrics, metric_name), labels, preds)
 
-    preds = probs > 0.5
+            if metric_name not in metric_dict:
+                metric_dict[metric_name] = dict()
+            # metric_dict[metric_name][f'{metric_name}_{threshold * 100:03}'] = metric_value
+            metric_dict[metric_name][f'{int(threshold * 100):02}'] = metric_value
+
+    return metric_dict
+
+
+def calc_metrics(probs, labels, threshold=0.5):
+    fpr, tpr, _ = sklearn.metrics.roc_curve(labels, probs)
+    auc_roc = sklearn.metrics.auc(fpr, tpr)
+
+    precision_pr, recall_pr, _ = sklearn.metrics.precision_recall_curve(labels, probs)
+    auc_pr = sklearn.metrics.auc(recall_pr, precision_pr)
+
+    preds = probs > threshold
     accuracy_combined = calc_metric(sklearn.metrics.accuracy_score, labels, preds)
     f1_score = calc_metric(sklearn.metrics.f1_score, labels, preds)
     precision = calc_metric(sklearn.metrics.precision_score, labels, preds)
