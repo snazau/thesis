@@ -37,12 +37,16 @@ def generate_raw_samples(raw_eeg, sample_start_times, sample_duration):
     channels_num = len(raw_eeg.info['ch_names'])
 
     samples = np.zeros((samples_num, channels_num, sample_len_in_idxs))
+    time_idxs_start = np.zeros((samples_num, ))
+    time_idxs_end = np.zeros((samples_num, ))
     for sample_idx, sample_start_time in enumerate(sample_start_times):
         start_idx = int(frequency * sample_start_time)
         end_idx = start_idx + sample_len_in_idxs
         samples[sample_idx] = raw_data[:, start_idx:end_idx]
+        time_idxs_start[sample_idx] = start_idx
+        time_idxs_end[sample_idx] = end_idx
 
-    return samples
+    return samples, time_idxs_start, time_idxs_end
 
 
 class SubjectRandomDataset(torch.utils.data.Dataset):
@@ -106,7 +110,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         # print(f'seizures = {self.seizures}')
         # print(f'normal_segments = {self.normal_segments}')
 
-        self.mask, self.sample_start_times, self.targets, self.raw_samples = self._generate_data()
+        self.mask, self.sample_start_times, self.targets, self.raw_samples, self.time_idxs_start, self.time_idxs_end = self._generate_data()
         self.freqs = np.arange(1, 40.01, 0.1)
         # print(f'self.raw_samples.shape = {self.raw_samples.shape}')
 
@@ -184,20 +188,28 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         # sample_start_times[0] = 23860
 
         targets = mask.astype(np.int)
-        raw_samples = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
+        raw_samples, time_idxs_start, time_idxs_end = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
 
-        return mask, sample_start_times, targets, raw_samples
+        return mask, sample_start_times, targets, raw_samples, time_idxs_start, time_idxs_end
 
     def renew_data(self):
-        self.mask, self.sample_start_times, self.targets, self.raw_samples = self._generate_data()
+        (
+            self.mask,
+            self.sample_start_times,
+            self.targets,
+            self.raw_samples,
+            self.time_idxs_start,
+            self.time_idxs_end
+        ) = self._generate_data()
 
 
 class SubjectSequentialDataset(torch.utils.data.Dataset):
-    def __init__(self, eeg_file_path, seizures, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
+    def __init__(self, eeg_file_path, seizures, sample_duration=60, shift=None, normalization=None, data_type='power_spectrum', transform=None):
         self.eeg_file_path = eeg_file_path
         self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
         self.seizures = seizures
         self.sample_duration = sample_duration
+        self.shift = shift if shift is not None else self.sample_duration
         self.data_type = data_type
         self.normalization = normalization
         self.transform = transform
@@ -228,7 +240,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         time_start, time_end = self.raw.times.min(), self.raw.times.max()
 
         # get start time for samples
-        self.sample_start_times = [start_time for start_time in np.arange(time_start, time_end - self.sample_duration, self.sample_duration)]
+        self.sample_start_times = [start_time for start_time in np.arange(time_start, time_end - self.sample_duration, self.shift)]
 
         # generate targets
         self.targets = np.array([
@@ -237,7 +249,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         ])
 
         # generate raw samples
-        self.raw_samples = generate_raw_samples(self.raw, self.sample_start_times, self.sample_duration)
+        self.raw_samples, self.time_idxs_start, self.time_idxs_end = generate_raw_samples(self.raw, self.sample_start_times, self.sample_duration)
         self.freqs = np.arange(1, 40.01, 0.1)
 
     def __len__(self):
@@ -276,6 +288,8 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             'start_time': self.sample_start_times[idx],
             'eeg_file_path': self.eeg_file_path,
             'channel_name_to_idx': self.channel_name_to_idx,
+            'time_idx_start': self.time_idxs_start[idx],
+            'time_idx_end': self.time_idxs_end[idx],
         }
         return sample
 
@@ -307,6 +321,39 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
         # batch['data'] = torch.from_numpy(sample_data).float()
 
         batch = torch.utils.data.dataloader.default_collate(batch)
+
+    return batch
+
+
+def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128):
+    if data_type == 'power_spectrum':
+        # wavelet (morlet) transform
+        raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
+        power_spectrum = mne.time_frequency.tfr_array_morlet(
+            raw_data.numpy(),
+            sfreq=sfreq,
+            freqs=freqs,
+            n_cycles=freqs,
+            output='power',
+            n_jobs=-1
+        )
+        power_spectrum = np.log(power_spectrum)
+
+        if normalization == 'minmax':
+            power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
+        elif normalization == 'meanstd':
+            power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
+
+        for sample_idx in range(power_spectrum.shape[0]):
+            batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx]).float()
+
+    for sample_idx in range(len(batch)):
+        original_data = batch[sample_idx]['data'].clone()
+        for aug_idx, aug_func in enumerate(tta_augs):
+            transformed_sample = aug_func(batch[sample_idx])
+            batch[sample_idx][f'data_aug{aug_idx:03}'] = transformed_sample['data']
+            batch[sample_idx]['data'] = original_data.clone()
+    batch = torch.utils.data.dataloader.default_collate(batch)
 
     return batch
 
