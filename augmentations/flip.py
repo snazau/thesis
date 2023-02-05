@@ -10,7 +10,6 @@ class TimeFlip:
     def __call__(self, sample):
         # data.shape = (C, F, T)
         if random.random() < self.p:
-            print(sample['data'].shape)
             sample['data'] = torch.flip(sample['data'], dims=(2, ))
         return sample
 

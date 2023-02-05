@@ -8,7 +8,7 @@ def mixup(data, targets, alpha=1.0):
     if alpha > 0:
         lam = np.random.beta(alpha, alpha)
     else:
-        lam = 1
+        lam = 1.0
 
     batch_size = data.size()[0]
     if data.is_cuda is True:

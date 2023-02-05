@@ -18,11 +18,11 @@ def train(strategy_name, strategy_params, loader, model, criterion, optimizer, e
 
     loss_avg_meter = utils.avg_meters.AverageMeter()
     with tqdm.tqdm(loader) as tqdm_wrapper:
-        for batch_idx, sample in enumerate(tqdm_wrapper):
+        for batch_idx, batch in enumerate(tqdm_wrapper):
             tqdm_wrapper.set_description(f'Epoch {epoch:03}')
 
-            inputs = sample["data"].to(device)
-            labels = sample["target"].to(device)
+            inputs = batch["data"].to(device)
+            labels = batch["target"].to(device)
 
             optimizer.zero_grad()
             outputs, loss = utils.neural.training.forward(strategy_name, strategy_params, model, inputs, labels, criterion)
@@ -57,9 +57,9 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
 
     loss_avg_meter = utils.avg_meters.AverageMeter()
     with tqdm.tqdm(loader) as tqdm_wrapper:
-        for batch_idx, sample in enumerate(tqdm_wrapper):
-            inputs = sample["data"].to(device)
-            labels = sample["target"].to(device)
+        for batch_idx, batch in enumerate(tqdm_wrapper):
+            inputs = batch["data"].to(device)
+            labels = batch["target"].to(device)
 
             with torch.no_grad():
                 outputs, loss = utils.neural.training.forward('default', {}, model, inputs, labels, criterion)
