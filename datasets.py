@@ -49,6 +49,20 @@ def generate_raw_samples(raw_eeg, sample_start_times, sample_duration):
     return samples, time_idxs_start, time_idxs_end
 
 
+def drop_unused_channels(eeg_file_path, raw_file):
+    # drop unnecessary channels
+    if 'data1' in eeg_file_path:
+        channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
+    elif 'data2' in eeg_file_path:
+        channels_to_drop = ['EEG ECG', 'Value MKR+', 'EEG Fpz', 'EEG EMG']
+    else:
+        raise NotImplementedError
+
+    channels_num = len(raw_file.info['ch_names'])
+    channels_to_drop = channels_to_drop[:2 + (channels_num - 27)]
+    raw_file.drop_channels(channels_to_drop)
+
+
 class SubjectRandomDataset(torch.utils.data.Dataset):
     def __init__(self, eeg_file_path, seizures, samples_num, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
         self.eeg_file_path = eeg_file_path
@@ -158,6 +172,10 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             'eeg_file_path': self.eeg_file_path,
             'channel_name_to_idx': self.channel_name_to_idx,
         }
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
         return sample
 
     def _generate_data(self):
@@ -291,6 +309,10 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             'time_idx_start': self.time_idxs_start[idx],
             'time_idx_end': self.time_idxs_end[idx],
         }
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
         return sample
 
 
@@ -320,7 +342,7 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
             # batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx])
         # batch['data'] = torch.from_numpy(sample_data).float()
 
-        batch = torch.utils.data.dataloader.default_collate(batch)
+    batch = torch.utils.data.dataloader.default_collate(batch)
 
     return batch
 
@@ -379,7 +401,9 @@ if __name__ == '__main__':
     model = utils.neural.training.get_model(model_name='resnet18', model_kwargs={'pretrained': True}).to(device)
     model.eval()
 
-    subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10)
+    subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, data_type='raw')
+    print(subject_dataset[0]['data'].shape)
+    exit()
     # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
     loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16)
     torch.cuda.synchronize()
