@@ -27,7 +27,7 @@ class EEGReader:
     @staticmethod
     def read_dat(file_path):
         raw_data = np.loadtxt(file_path)
-        print(raw_data.min(), raw_data.mean(), raw_data.max())
+        # print(raw_data.min(), raw_data.mean(), raw_data.max())
         raw_data = raw_data.T * 1e-6
         # raw_data = raw_data.T
 
