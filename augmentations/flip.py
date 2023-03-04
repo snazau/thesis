@@ -37,6 +37,9 @@ class EEGChannelsFlip:
         # for i in range(sample['data'].shape[0]):
         #     sample['data'][i] = torch.from_numpy(draw_text(sample['data'][i], x=50, y=300, text=f'{i:02}'))
 
+        # data.shape = (C, F, T)
+        channels_num = sample['data'].shape[0]
+
         if random.random() < self.p:
             channel_name_to_idx = sample['channel_name_to_idx']
             for channels_pair in self.channels_to_swap:
@@ -47,9 +50,17 @@ class EEGChannelsFlip:
                 channel_idx_two = channel_name_to_idx[channel_name_two]
 
                 # channel_temp = sample['data'][channel_idx_one].copy()
-                channel_temp = sample['data'][channel_idx_one].clone()
-                sample['data'][channel_idx_one] = sample['data'][channel_idx_two]
-                sample['data'][channel_idx_two] = channel_temp
+
+                if channels_num == 25:
+                    channel_temp = sample['data'][channel_idx_one].clone()
+                    sample['data'][channel_idx_one] = sample['data'][channel_idx_two]
+                    sample['data'][channel_idx_two] = channel_temp
+                elif channels_num == 1:
+                    channel_temp = sample['data'][:, channel_idx_one].clone()
+                    sample['data'][:, channel_idx_one] = sample['data'][:, channel_idx_two]
+                    sample['data'][:, channel_idx_two] = channel_temp
+                else:
+                    raise NotImplementedError
 
                 # print(f'swapped channel_idx_one = {channel_idx_one} ({channel_name_one}) channel_idx_two = {channel_idx_two} ({channel_name_two})')
         return sample
@@ -86,17 +97,18 @@ if __name__ == "__main__":
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
     import datasets
-    subject_dataset = datasets.SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, normalization='meanstd')
+    subject_dataset = datasets.SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, normalization='meanstd', data_type='raw')
 
     sample = subject_dataset[0]
-    # aug = TimeFlip(p=1)
-    aug = EEGChannelsFlip(p=0)
+    aug = TimeFlip(p=1)
+    # aug = EEGChannelsFlip(p=1)
     sample = aug(sample)
+    print(sample['data'].shape)
 
-    import numpy as np
-    import visualization
-    # visualization.plot_spectrum_averaged(np.exp(sample['data']), subject_dataset.freqs)
-    # visualization.plot_spectrum_channels(sample['data'], time_idx_from=0, time_idx_to=128 * 9)
-    visualization.plot_spectrum_averaged(np.exp(sample['data'].cpu().numpy()), subject_dataset.freqs)
-    visualization.plot_spectrum_channels(sample['data'].cpu().numpy(), time_idx_from=0, time_idx_to=128 * 9)
+    # import numpy as np
+    # import visualization
+    # # visualization.plot_spectrum_averaged(np.exp(sample['data']), subject_dataset.freqs)
+    # # visualization.plot_spectrum_channels(sample['data'], time_idx_from=0, time_idx_to=128 * 9)
+    # visualization.plot_spectrum_averaged(np.exp(sample['data'].cpu().numpy()), subject_dataset.freqs)
+    # visualization.plot_spectrum_channels(sample['data'].cpu().numpy(), time_idx_from=0, time_idx_to=128 * 9)
 
