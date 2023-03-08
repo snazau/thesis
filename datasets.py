@@ -1,3 +1,5 @@
+import pickle
+
 import mne
 import numpy as np
 import torch
@@ -63,12 +65,35 @@ def drop_unused_channels(eeg_file_path, raw_file):
     raw_file.drop_channels(channels_to_drop)
 
 
+def extract_fp_times(prediction_data, threshold, sfreq):
+    time_idxs_start = prediction_data['time_idxs_start']
+    probs = prediction_data['probs_wo_tta']
+    labels = prediction_data['labels']
+
+    fp_mask = ((labels == 0) & (probs > threshold))
+    fp_start_times = time_idxs_start[fp_mask] / sfreq
+
+    return fp_start_times
+
+
+def extract_fn_times(prediction_data, threshold, sfreq):
+    time_idxs_start = prediction_data['time_idxs_start']
+    probs = prediction_data['probs_wo_tta']
+    labels = prediction_data['labels']
+
+    fn_mask = ((labels == 1) & (probs <= threshold))
+    fn_start_times = time_idxs_start[fn_mask] / sfreq
+
+    return fn_start_times
+
+
 class SubjectRandomDataset(torch.utils.data.Dataset):
-    def __init__(self, eeg_file_path, seizures, samples_num, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
+    def __init__(self, eeg_file_path, seizures, samples_num, prediction_data_path=None, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
         self.eeg_file_path = eeg_file_path
         self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
         self.seizures = seizures
         self.samples_num = samples_num
+        self.prediction_data = None if prediction_data_path is None else pickle.load(open(prediction_data_path, 'rb'))
         self.sample_duration = sample_duration
         self.data_type = data_type
         self.normalization = normalization
@@ -201,11 +226,36 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
 
         # generate samples
         mask = np.random.uniform(size=self.samples_num) > 0.5
-        sample_start_times = mask * seizure_times + (1 - mask) * normal_times
-        # print(f'len(sample_start_times) = {len(sample_start_times)}')
-        # sample_start_times[0] = 23860
-
         targets = mask.astype(np.int)
+        sample_start_times = mask * seizure_times + (1 - mask) * normal_times
+
+        if self.prediction_data is not None:
+            fp_start_times = extract_fp_times(self.prediction_data, threshold=0.95, sfreq=self.raw.info['sfreq'])
+            fn_start_times = extract_fn_times(self.prediction_data, threshold=0.95, sfreq=self.raw.info['sfreq'])
+
+            fp_num_to_pick = min(len(fp_start_times), self.samples_num // 2)
+            fn_num_to_pick = min(len(fn_start_times), self.samples_num // 2)
+
+            fp_picked_start_times = np.random.choice(fp_start_times, size=fp_num_to_pick, replace=False)
+            fn_picked_start_times = np.random.choice(fn_start_times, size=fn_num_to_pick, replace=False)
+
+            false_preds_start_times = np.append(fp_picked_start_times, fn_picked_start_times)
+            false_preds_labels = np.append(np.zeros_like(fp_picked_start_times), np.ones_like(fn_picked_start_times))
+
+            random_permutation = np.random.permutation(len(false_preds_labels))
+            false_preds_start_times = false_preds_start_times[random_permutation]
+            false_preds_labels = false_preds_labels[random_permutation]
+
+            sample_start_times = np.append(sample_start_times, false_preds_start_times)
+            targets = np.append(targets, false_preds_labels)
+
+            sample_start_times = sample_start_times[-self.samples_num:]
+            targets = targets[-self.samples_num:]
+
+            random_permutation = np.random.permutation(len(sample_start_times))
+            sample_start_times = sample_start_times[random_permutation]
+            targets = targets[random_permutation]
+
         raw_samples, time_idxs_start, time_idxs_end = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
 
         return mask, sample_start_times, targets, raw_samples, time_idxs_start, time_idxs_end
@@ -391,7 +441,8 @@ if __name__ == '__main__':
     data_dir = './data'
     # subject_key = 'data1/dataset28'
     # subject_key = 'data1/dataset2'
-    subject_key = 'data2/038tl Anonim-20190821_113559-20211123_004935'
+    # subject_key = 'data2/038tl Anonim-20190821_113559-20211123_004935'
+    subject_key = 'data2/003tl Anonim-20200831_040629-20211122_135924'
     subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
@@ -401,7 +452,14 @@ if __name__ == '__main__':
     model = utils.neural.training.get_model(model_name='resnet18', model_kwargs={'pretrained': True}).to(device)
     model.eval()
 
-    subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, data_type='raw')
+    subject_dataset = SubjectRandomDataset(
+        subject_eeg_path,
+        subject_seizures,
+        samples_num=100,
+        prediction_data_path=r'D:\Study\asp\thesis\implementation\experiments\renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug\predictions\data2\003tl Anonim-20200831_040629-20211122_135924.pickle',
+        sample_duration=10,
+        data_type='raw',
+    )
     print(subject_dataset[0]['data'].shape)
     exit()
     # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
