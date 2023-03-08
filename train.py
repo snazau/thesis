@@ -132,10 +132,24 @@ def run_training(config):
     # Scheduler
     scheduler = utils.neural.training.get_scheduler(config['scheduler']['name'], config['scheduler']['params'], optimizer)
 
+    # Pretrained weights
+    pretrained_epochs_num = 0
+    if 'pretrained_path' in config:
+        checkpoint = utils.neural.training.load_checkpoint(config['pretrained_path'])
+        model.load_state_dict(checkpoint['model']['state_dict'])
+
+        if 'optimizer' in checkpoint:
+            optimizer.load_state_dict(checkpoint['optimizer']['state_dict'])
+
+        if config['continue_epochs']:
+            pretrained_epochs_num = checkpoint['epoch'] + 1
+        print('Successfully loaded pretrained weights')
+        print(f'Pretrained metrics:\n{checkpoint["metrics"]}')
+
     # Train loop
     min_val_loss = 1e10
     epochs = config['epochs']
-    for epoch in range(epochs):
+    for epoch in range(pretrained_epochs_num, pretrained_epochs_num + epochs):
         print('Renewing training raw data')
         for dataset_idx in range(len(datasets_train)):
             datasets_train[dataset_idx].renew_data()
@@ -176,6 +190,7 @@ def run_training(config):
             epoch,
             config,
             model,
+            optimizer,
             checkpoint_losses,
             checkpoint_metrics,
         )
@@ -186,6 +201,7 @@ def run_training(config):
             epoch,
             config,
             model,
+            optimizer,
             checkpoint_losses,
             checkpoint_metrics,
         )
@@ -197,6 +213,7 @@ def run_training(config):
                 epoch,
                 config,
                 model,
+                optimizer,
                 checkpoint_losses,
                 checkpoint_metrics,
             )

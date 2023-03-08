@@ -170,17 +170,26 @@ def calc_metrics(probs, labels, threshold=0.5):
     return metric_dict
 
 
-def save_checkpoint(save_path, epoch, config, model, losses, metrics):
+def save_checkpoint(save_path, epoch, config, model, optimizer, losses, metrics):
     checkpoint = {
         'epoch': epoch,
         'losses': losses,
         'metrics': metrics,
+        'optimizer': {
+            'name': optimizer.__class__.__name__,
+            'state_dict': optimizer.state_dict(),
+        },
         'model': {
             'name': model.__class__.__name__,
             'state_dict': model.state_dict()
         },
     }
     torch.save(checkpoint, save_path)
+
+
+def load_checkpoint(checkpoint_path):
+    checkpoint = torch.load(checkpoint_path)
+    return checkpoint
 
 
 def set_seed(seed=8, deterministic=False):
