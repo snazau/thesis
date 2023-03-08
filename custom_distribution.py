@@ -4,7 +4,7 @@ import numpy as np
 def unifrom_segments_sample(size, segments):
     prob = np.array([segment['end'] - segment['start'] for segment in segments])
     prob = prob / prob.sum()
-    print(f'prob = {prob}')
+    # print(f'prob = {prob}')
 
     sample = np.array(
         [
