@@ -477,6 +477,85 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         return sample
 
 
+class SubjectInferenceDataset(torch.utils.data.Dataset):
+    def __init__(self, eeg_file_path, sample_start_times, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
+        self.eeg_file_path = eeg_file_path
+        self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
+        self.sample_duration = sample_duration
+        self.data_type = data_type
+        self.normalization = normalization
+        self.transform = transform
+        self.sample_start_times = sample_start_times
+
+        # drop unnecessary channels
+        if 'data1' in self.eeg_file_path:
+            channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
+        elif 'data2' in self.eeg_file_path:
+            channels_to_drop = ['EEG ECG', 'Value MKR+', 'EEG Fpz', 'EEG EMG']
+        else:
+            raise NotImplementedError
+
+        channels_num = len(self.raw.info['ch_names'])
+        channels_to_drop = channels_to_drop[:2 + (channels_num - 27)]
+        self.raw.drop_channels(channels_to_drop)
+
+        self.channel_name_to_idx = {
+            channel_name.replace('EEG ', ''): channel_idx for channel_idx, channel_name in enumerate(self.raw.info['ch_names'])
+        }
+
+        self.raw_samples, self.time_idxs_start, self.time_idxs_end = generate_raw_samples(
+            self.raw,
+            self.sample_start_times,
+            self.sample_duration,
+        )
+        self.freqs = np.arange(1, 40.01, 0.1)
+        # print(f'self.raw_samples.shape = {self.raw_samples.shape}')
+
+    def __len__(self):
+        return len(self.raw_samples)
+
+    def __getitem__(self, idx):
+        raw_sample = self.raw_samples[idx:idx + 1]
+
+        if self.data_type == 'raw':
+            sample_data = np.expand_dims(raw_sample, axis=1)
+        elif self.data_type == 'power_spectrum':
+            # wavelet (morlet) transform
+            power_spectrum = mne.time_frequency.tfr_array_morlet(
+                raw_sample,
+                sfreq=self.raw.info['sfreq'],
+                freqs=self.freqs,
+                n_cycles=self.freqs,
+                output='power',
+                n_jobs=1
+            )
+            power_spectrum = np.log(power_spectrum)
+
+            sample_data = power_spectrum
+        else:
+            raise NotImplementedError
+
+        if self.normalization == 'minmax':
+            sample_data = (sample_data - sample_data.min()) / (sample_data.max() - sample_data.min())
+        elif self.normalization == 'meanstd':
+            sample_data = (sample_data - sample_data.mean()) / sample_data.std()
+
+        sample = {
+            'data': torch.from_numpy(sample_data[0]).float(),
+            'raw': torch.from_numpy(raw_sample[0]).float(),
+            'start_time': self.sample_start_times[idx],
+            'eeg_file_path': self.eeg_file_path,
+            'channel_name_to_idx': self.channel_name_to_idx,
+            'time_idx_start': self.time_idxs_start[idx],
+            'time_idx_end': self.time_idxs_end[idx],
+        }
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        return sample
+
+
 def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False, transform=None):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
