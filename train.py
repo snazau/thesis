@@ -153,6 +153,7 @@ def run_training(config):
 
     # Train loop
     min_val_loss = 1e10
+    min_val_loss_epoch = -1
     epochs = config['epochs']
     for epoch in range(pretrained_epochs_num, pretrained_epochs_num + epochs):
         print('Renewing training raw data')
@@ -212,6 +213,8 @@ def run_training(config):
         )
 
         if loss_avg_val < min_val_loss:
+            min_val_loss = loss_avg_val
+            min_val_loss_epoch = epoch
             checkpoint_path = os.path.join(checkpoints_dir, 'best.pth.tar')
             utils.neural.training.save_checkpoint(
                 checkpoint_path,
@@ -228,4 +231,5 @@ def run_training(config):
                 scheduler.step(min_val_loss)
             elif isinstance(scheduler, torch.optim.lr_scheduler.CosineAnnealingLR):
                 scheduler.step()
+        print(f'epoch = {epoch} min_val_loss = {min_val_loss} min_val_loss_epoch = {min_val_loss_epoch}')
         print()
