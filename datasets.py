@@ -16,15 +16,16 @@ def check_if_in_segments(time_point, segments):
 
 
 def generate_raw_samples(raw_eeg, sample_start_times, sample_duration):
-    # my_annot = mne.Annotations(
-    #     onset=[sample_start_time for sample_start_time in sample_start_times],
-    #     duration=[self.sample_duration for _ in sample_start_times],
-    #     description=[f'seizure' if is_seizure_sample else f'normal' for idx, is_seizure_sample in enumerate(self.mask)]
-    # )
-    # self.raw.set_annotations(my_annot)
-    # self.raw.plot()
-    # import matplotlib.pyplot as plt
-    # plt.show()
+    # if mask is not None:
+    #     my_annot = mne.Annotations(
+    #         onset=[sample_start_time for sample_start_time in sample_start_times],
+    #         duration=[sample_duration for _ in sample_start_times],
+    #         description=[f'seizure' if is_seizure_sample else f'normal' for idx, is_seizure_sample in enumerate(mask)]
+    #     )
+    #     raw_eeg.set_annotations(my_annot)
+    #     raw_eeg.plot()
+    #     import matplotlib.pyplot as plt
+    #     plt.show()
 
     # events, event_id = mne.events_from_annotations(self.raw)
     # epochs = mne.Epochs(self.raw, events, tmin=0, tmax=self.sample_duration, baseline=None, event_repeated='drop')
