@@ -168,6 +168,16 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             print('Trimming last seizure')
             self.seizures[-1]['end'] = self.raw.times.max() - self.sample_duration - 1e-3
 
+        # my_annot = mne.Annotations(
+        #     onset=[seizure['start'] for seizure in self.seizures],
+        #     duration=[seizure['end'] - seizure['start'] for seizure in self.seizures],
+        #     description=[f'seizure' for seizure in self.seizures]
+        # )
+        # self.raw.set_annotations(my_annot)
+        # self.raw.plot()
+        # import matplotlib.pyplot as plt
+        # plt.show()
+
         # drop unnecessary channels
         if 'data1' in self.eeg_file_path:
             channels_to_drop = ['EEG ECG', 'EEG MKR+ MKR-', 'EEG Fpz', 'EEG EMG']
@@ -641,8 +651,8 @@ if __name__ == '__main__':
     data_dir = './data'
     # subject_key = 'data1/dataset28'
     # subject_key = 'data1/dataset2'
-    # subject_key = 'data2/038tl Anonim-20190821_113559-20211123_004935'
-    subject_key = 'data2/003tl Anonim-20200831_040629-20211122_135924'
+    subject_key = 'data2/038tl Anonim-20190821_113559-20211123_004935'
+    # subject_key = 'data2/003tl Anonim-20200831_040629-20211122_135924'
     subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
@@ -652,34 +662,36 @@ if __name__ == '__main__':
     model = utils.neural.training.get_model(model_name='resnet18', model_kwargs={'pretrained': True}).to(device)
     model.eval()
 
-    subject_dataset = SubjectRandomDataset(
-        subject_eeg_path,
-        subject_seizures,
-        samples_num=100,
-        prediction_data_path=r'D:\Study\asp\thesis\implementation\experiments\renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug\predictions\data2\003tl Anonim-20200831_040629-20211122_135924.pickle',
-        sample_duration=10,
-        data_type='raw',
-    )
-    print(subject_dataset[0]['data'].shape)
-    exit()
-    # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
-    loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16)
-    torch.cuda.synchronize()
-    time_start = time.time()
-    for batch_idx, batch in enumerate(loader):
-        with torch.no_grad():
-            output = model(batch['data'].to(device))
-        print(f'\rProgress {batch_idx + 1}/{len(loader)}', end='')
-        if batch_idx > 20:
-            break
-    torch.cuda.synchronize()
-    time_elapsed = time.time() - time_start
-    print(f'\ntime_elapsed = {time_elapsed}')
+    # subject_dataset = SubjectRandomDataset(
+    #     subject_eeg_path,
+    #     subject_seizures,
+    #     samples_num=100,
+    #     # prediction_data_path=r'D:\Study\asp\thesis\implementation\experiments\renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug\predictions\data2\003tl Anonim-20200831_040629-20211122_135924.pickle',
+    #     sample_duration=10,
+    #     # data_type='raw',
+    #     data_type='power_spectrum',
+    #     baseline_correction=True
+    # )
+    # print(subject_dataset[0]['data'].shape)
+    # exit()
+    # # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
+    # loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16)
+    # torch.cuda.synchronize()
+    # time_start = time.time()
+    # for batch_idx, batch in enumerate(loader):
+    #     with torch.no_grad():
+    #         output = model(batch['data'].to(device))
+    #     print(f'\rProgress {batch_idx + 1}/{len(loader)}', end='')
+    #     if batch_idx > 20:
+    #         break
+    # torch.cuda.synchronize()
+    # time_elapsed = time.time() - time_start
+    # print(f'\ntime_elapsed = {time_elapsed}')
 
     subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, data_type='raw')
     # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10, data_type='raw')
     from functools import partial
-    collate_fn = partial(custom_collate_function, data_type='power_spectrum', normalization=None)
+    collate_fn = partial(custom_collate_function, data_type='power_spectrum', normalization=None, baseline_correction=True)
     loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16, collate_fn=collate_fn)
     torch.cuda.synchronize()
     time_start = time.time()
