@@ -63,6 +63,8 @@ def get_scheduler(scheduler_name, scheduler_kwargs, optimizer):
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, **scheduler_kwargs)
         elif scheduler_name == "CosineAnnealingLR":
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, **scheduler_kwargs)
+        elif scheduler_name == "StepLR":
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, **scheduler_kwargs)
         else:
             raise NotImplementedError
 
