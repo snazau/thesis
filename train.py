@@ -156,28 +156,32 @@ def run_training(config):
     min_val_loss_epoch = -1
     epochs = config['epochs']
     for epoch in range(pretrained_epochs_num, pretrained_epochs_num + epochs):
-        print('Renewing training raw data')
-        for dataset_idx in range(len(datasets_train)):
-            datasets_train[dataset_idx].renew_data()
-        loader_train = utils.neural.training.get_loader(
-            datasets_train,
-            loader_kwargs=config['data']['train']['loader_params'],
-        )
+        if len(config['data']['train']['subject_keys']) > 0:
+            print('Renewing training raw data')
+            for dataset_idx in range(len(datasets_train)):
+                datasets_train[dataset_idx].renew_data()
+            loader_train = utils.neural.training.get_loader(
+                datasets_train,
+                loader_kwargs=config['data']['train']['loader_params'],
+            )
 
-        print(f'training started e={epoch:03}/{epochs:03}')
-        loss_avg_train, metrics_train = train(
-            config['strategy']['name'],
-            config['strategy']['params'],
-            loader_train,
-            model,
-            criterion,
-            optimizer,
-            epoch,
-            writer,
-            device,
-        )
-        print(f'loss_avg_train = {loss_avg_train} metrics_train = {metrics_train}')
-        gc.collect()
+            print(f'training started e={epoch:03}/{epochs:03}')
+            loss_avg_train, metrics_train = train(
+                config['strategy']['name'],
+                config['strategy']['params'],
+                loader_train,
+                model,
+                criterion,
+                optimizer,
+                epoch,
+                writer,
+                device,
+            )
+            print(f'loss_avg_train = {loss_avg_train} metrics_train = {metrics_train}')
+            gc.collect()
+        else:
+            loss_avg_train = -1
+            metrics_train = dict()
 
         print(f'Validation started e={epoch:03}/{epochs:03}')
         loss_avg_val, metrics_val = validate(loader_val, model, criterion, optimizer, epoch, writer, device)
