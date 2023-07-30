@@ -147,6 +147,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             samples_num,
             prediction_data_path=None,
             sample_duration=60,
+            normal_samples_fraction=0.5,
             normalization=None,
             data_type='power_spectrum',
             baseline_correction=False,
@@ -159,6 +160,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.prediction_data = None if prediction_data_path is None else pickle.load(open(prediction_data_path, 'rb'))
         self.sample_duration = sample_duration
         self.data_type = data_type
+        self.normal_samples_fraction = normal_samples_fraction
         self.normalization = normalization
         self.baseline_correction = baseline_correction
         self.transform = transform
@@ -316,7 +318,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         )
 
         # generate samples
-        mask = np.random.uniform(size=self.samples_num) > 0.5
+        mask = np.random.uniform(size=self.samples_num) > self.normal_samples_fraction
         targets = mask.astype(np.int)
         sample_start_times = mask * seizure_times + (1 - mask) * normal_times
 
