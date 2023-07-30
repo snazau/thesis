@@ -220,20 +220,29 @@ if __name__ == '__main__':
     import utils.avg_meters
     metric_meter = utils.avg_meters.MetricMeter()
 
-    experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'
+    # experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
+    # experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm_validation_only'
+    experiment_name = '24072023_efficientnet_b0_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
+    # experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'
+    # experiment_name = 'renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug'
     visualizations_dir = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\visualizations'
     os.makedirs(visualizations_dir, exist_ok=True)
 
-    threshold = 0.95
+    threshold = 0.99
     # filter_method = None
     # k_size = -1
     filter_method = 'median'
     k_size = 7
     print(f'threshold = {threshold:03.2f} filter={filter_method} k={k_size}')
     subject_keys = [
-        # 'data2/038tl Anonim-20190821_113559-20211123_004935'
-        # 'data2/008tl Anonim-20210204_131328-20211122_160417'
+        # # 'data2/038tl Anonim-20190821_113559-20211123_004935'
+        # # 'data2/008tl Anonim-20210204_131328-20211122_160417'
+        #
+        # 'data2/018tl Anonim-20201211_130036-20211122_163611',
+        # 'data2/006tl Anonim-20210208_063816-20211122_154113',
+        # 'data1/dataset20',
 
+        # stage_1
         # part1
         'data2/038tl Anonim-20190821_113559-20211123_004935',  # val
         'data2/027tl Anonim-20200309_195746-20211122_175315',  # val
@@ -275,9 +284,27 @@ if __name__ == '__main__':
         'data2/035tl Anonim-20210324_151211-20211122_222545',
         'data2/038tl Anonim-20190822_203419-20211123_005705', 'data1/dataset25', 'data1/dataset5',
         'data2/018tl Anonim-20201215_022951-20211122_165644',
+
+        # # stage_2
+        # 'data2/003tl Anonim-20200831_120629-20211122_140327',
+        # 'data1/dataset12',
+        # 'data2/025tl Anonim-20210129_073208-20211122_173728',
+        # 'data2/038tl Anonim-20190822_131550-20211123_005257', 'data1/dataset2',
+        # 'data1/dataset22',
+        # 'data2/040tl Anonim-20200421_100248-20211123_010147',
+        # 'data2/020tl Anonim-20201216_073813-20211122_171341',
+        # 'data2/019tl Anonim-20201213_072025-20211122_165918',
+        # 'data2/003tl Anonim-20200831_040629-20211122_135924',
+        # 'data2/006tl Anonim-20210208_063816-20211122_154113', 'data1/dataset4', 'data1/dataset20',
+        # 'data2/035tl Anonim-20210324_231349-20211122_223059', 'data1/dataset16',
+        # 'data2/035tl Anonim-20210324_151211-20211122_222545',
+        # 'data2/038tl Anonim-20190822_203419-20211123_005705', 'data1/dataset25', 'data1/dataset5',
+        # 'data2/018tl Anonim-20201215_022951-20211122_165644',
     ]
+    # subject_keys = ['data2/027tl Anonim-20200309_195746-20211122_175315']
     for subject_key in subject_keys:
         prediction_path = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\predictions\{subject_key}.pickle'
+        # prediction_path = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\predictions_positive_only\{subject_key}.pickle'
         prediction_data = pickle.load(open(prediction_path, 'rb'))
 
         set_visualizations_dir = os.path.join(visualizations_dir, subject_key.split('/')[0])
