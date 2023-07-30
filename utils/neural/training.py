@@ -111,16 +111,16 @@ def get_loader(datasets_list, loader_kwargs):
 
 
 def forward(strategy_name, strategy_kwargs, model, inputs, labels, criterion):
-    if strategy_name == 'mixup':
+    if strategy_name.lower() == 'mixup':
         mixed_inputs, labels, labels_shuffled, lam = utils.neural.mixing.mixup(inputs, labels, **strategy_kwargs)
         outputs = model(mixed_inputs)
         loss = lam * criterion(outputs, labels.float().unsqueeze(1)) + (1 - lam) * criterion(
             outputs,
             labels_shuffled.float().unsqueeze(1)
         )
-    elif strategy_name == 'fmix':
+    elif strategy_name.lower() == 'fmix':
         raise NotImplementedError
-    elif strategy_name == 'default':
+    elif strategy_name.lower() == 'default':
         outputs = model(inputs)
         loss = criterion(outputs, labels.float().unsqueeze(1))
     else:
