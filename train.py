@@ -146,7 +146,7 @@ def run_training(config):
         if 'optimizer' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer']['state_dict'])
 
-        if config['continue_epochs']:
+        if 'continue_epochs' in config and config['continue_epochs']:
             pretrained_epochs_num = checkpoint['epoch'] + 1
         print('Successfully loaded pretrained weights')
         print(f'Pretrained metrics:\n{checkpoint["metrics"]}')
@@ -229,7 +229,7 @@ def run_training(config):
         if scheduler is not None:
             if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 scheduler.step(min_val_loss)
-            elif isinstance(scheduler, torch.optim.lr_scheduler.CosineAnnealingLR):
+            else:
                 scheduler.step()
         print(f'epoch = {epoch} min_val_loss = {min_val_loss} min_val_loss_epoch = {min_val_loss_epoch}')
         print()
