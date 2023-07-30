@@ -54,12 +54,14 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
 
     all_labels = np.array([])
     all_probs = np.array([])
+    all_start_times = np.array([])
 
     loss_avg_meter = utils.avg_meters.AverageMeter()
     with tqdm.tqdm(loader) as tqdm_wrapper:
         for batch_idx, batch in enumerate(tqdm_wrapper):
             inputs = batch["data"].to(device)
             labels = batch["target"].to(device)
+            start_times = batch["start_time"].to(device)
 
             with torch.no_grad():
                 outputs, loss = utils.neural.training.forward('default', {}, model, inputs, labels, criterion)
@@ -69,6 +71,7 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
 
             all_labels = np.concatenate([all_labels, labels.cpu().detach().numpy()])
             all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
+            all_start_times = np.concatenate([all_start_times, start_times.cpu().detach().numpy()])
 
             tqdm_wrapper.set_postfix(loss=loss_avg_meter.avg)
 
