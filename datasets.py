@@ -109,8 +109,49 @@ def filter_fn_times(fn_start_times, seizures, min_deviation=-1, min_start_time=9
     return acceptable_fn_start_times
 
 
+def get_baseline_stats(raw_data, baseline_length_in_seconds=500, sfreq=128, freqs=np.arange(1, 40.01, 0.1)):
+    min_time, max_time = raw_data.times.min(), raw_data.times.max()
+
+    # sample_start_times = np.arange(min_time, max_time - baseline_length_in_seconds, baseline_length_in_seconds // 2)
+    sample_start_times = np.arange(min_time, max_time - baseline_length_in_seconds, max(baseline_length_in_seconds, max_time // baseline_length_in_seconds))
+    samples, _, _ = generate_raw_samples(
+        raw_data,
+        sample_start_times,
+        baseline_length_in_seconds
+    )
+
+    samples_std = np.std(samples, axis=2)  # std over time
+    samples_avg_std = np.mean(samples_std, axis=1)  # mean over channels
+    baseline_idx = np.argmin(samples_avg_std)
+    baseline_segment = samples[baseline_idx:baseline_idx + 1]
+
+    baseline_power_spectrum = mne.time_frequency.tfr_array_morlet(
+        baseline_segment,
+        sfreq=sfreq,
+        freqs=freqs,
+        n_cycles=freqs,
+        output='power',
+        n_jobs=-1
+    )
+    baseline_mean = np.mean(baseline_power_spectrum[0], axis=2, keepdims=True)
+    baseline_std = np.std(baseline_power_spectrum[0], axis=2, keepdims=True)
+
+    return baseline_mean, baseline_std
+
+
 class SubjectRandomDataset(torch.utils.data.Dataset):
-    def __init__(self, eeg_file_path, seizures, samples_num, prediction_data_path=None, sample_duration=60, normalization=None, data_type='power_spectrum', transform=None):
+    def __init__(
+            self,
+            eeg_file_path,
+            seizures,
+            samples_num,
+            prediction_data_path=None,
+            sample_duration=60,
+            normalization=None,
+            data_type='power_spectrum',
+            baseline_correction=False,
+            transform=None,
+    ):
         self.eeg_file_path = eeg_file_path
         self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
         self.seizures = seizures
@@ -119,6 +160,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.sample_duration = sample_duration
         self.data_type = data_type
         self.normalization = normalization
+        self.baseline_correction = baseline_correction
         self.transform = transform
 
         # trim last seizure
@@ -141,6 +183,17 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.channel_name_to_idx = {
             channel_name.replace('EEG ', ''): channel_idx for channel_idx, channel_name in enumerate(self.raw.info['ch_names'])
         }
+
+        # calc stuff for baseline correction
+        self.freqs = np.arange(1, 40.01, 0.1)
+        self.baseline_mean, self.baseline_std = get_baseline_stats(
+            self.raw,
+            baseline_length_in_seconds=500,
+            sfreq=self.raw.info['sfreq'],
+            freqs=self.freqs,
+        )
+        self.baseline_mean = self.baseline_mean[np.newaxis]
+        self.baseline_std = self.baseline_std[np.newaxis]
 
         # set montage
         # print(self.raw.get_data().min(), self.raw.get_data().mean(), self.raw.get_data().max())
@@ -172,7 +225,6 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         # print(f'normal_segments = {self.normal_segments}')
 
         self.mask, self.sample_start_times, self.targets, self.raw_samples, self.time_idxs_start, self.time_idxs_end = self._generate_data()
-        self.freqs = np.arange(1, 40.01, 0.1)
         # print(f'self.raw_samples.shape = {self.raw_samples.shape}')
 
     def __len__(self):
@@ -200,7 +252,12 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
                 output='power',
                 n_jobs=1
             )
-            power_spectrum = np.log(power_spectrum)
+
+            if self.baseline_correction:
+                power_spectrum = (power_spectrum - self.baseline_mean) / self.baseline_mean
+            else:
+                power_spectrum = np.log(power_spectrum)
+
 
             sample_data = power_spectrum
         else:
@@ -218,6 +275,8 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             'start_time': self.sample_start_times[idx],
             'eeg_file_path': self.eeg_file_path,
             'channel_name_to_idx': self.channel_name_to_idx,
+            'baseline_mean': self.baseline_mean,
+            'baseline_std': self.baseline_std,
         }
 
         if self.transform is not None:
@@ -297,7 +356,17 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
 
 
 class SubjectSequentialDataset(torch.utils.data.Dataset):
-    def __init__(self, eeg_file_path, seizures, sample_duration=60, shift=None, normalization=None, data_type='power_spectrum', transform=None):
+    def __init__(
+            self,
+            eeg_file_path,
+            seizures,
+            sample_duration=60,
+            shift=None,
+            normalization=None,
+            data_type='power_spectrum',
+            baseline_correction=False,
+            transform=None,
+    ):
         self.eeg_file_path = eeg_file_path
         self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
         self.seizures = seizures
@@ -305,6 +374,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         self.shift = shift if shift is not None else self.sample_duration
         self.data_type = data_type
         self.normalization = normalization
+        self.baseline_correction = baseline_correction
         self.transform = transform
 
         # trim last seizure
@@ -329,6 +399,17 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             enumerate(self.raw.info['ch_names'])
         }
 
+        # calc stuff for baseline correction
+        self.freqs = np.arange(1, 40.01, 0.1)
+        self.baseline_mean, self.baseline_std = get_baseline_stats(
+            self.raw,
+            baseline_length_in_seconds=500,
+            sfreq=self.raw.info['sfreq'],
+            freqs=self.freqs,
+        )
+        self.baseline_mean = self.baseline_mean[np.newaxis]
+        self.baseline_std = self.baseline_std[np.newaxis]
+
         # get time limits of eeg file in seconds
         time_start, time_end = self.raw.times.min(), self.raw.times.max()
 
@@ -343,7 +424,6 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
 
         # generate raw samples
         self.raw_samples, self.time_idxs_start, self.time_idxs_end = generate_raw_samples(self.raw, self.sample_start_times, self.sample_duration)
-        self.freqs = np.arange(1, 40.01, 0.1)
 
     def __len__(self):
         return len(self.raw_samples)
@@ -363,7 +443,11 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
                 output='power',
                 n_jobs=1
             )
-            power_spectrum = np.log(power_spectrum)
+
+            if self.baseline_correction:
+                power_spectrum = (power_spectrum - self.baseline_mean) / self.baseline_mean
+            else:
+                power_spectrum = np.log(power_spectrum)
 
             sample_data = power_spectrum
         else:
@@ -383,6 +467,8 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             'channel_name_to_idx': self.channel_name_to_idx,
             'time_idx_start': self.time_idxs_start[idx],
             'time_idx_end': self.time_idxs_end[idx],
+            'baseline_mean': self.baseline_mean,
+            'baseline_std': self.baseline_std,
         }
 
         if self.transform is not None:
@@ -391,7 +477,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         return sample
 
 
-def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, transform=None):
+def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False, transform=None):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
         raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
@@ -403,7 +489,12 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
             output='power',
             n_jobs=-1
         )
-        power_spectrum = np.log(power_spectrum)
+
+        if baseline_correction:
+            baseline_mean = np.concatenate([sample_data['baseline_mean'] for sample_data in batch], axis=0)
+            power_spectrum = (power_spectrum - baseline_mean) / baseline_mean
+        else:
+            power_spectrum = np.log(power_spectrum)
 
         if normalization == 'minmax':
             power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
@@ -422,7 +513,7 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
     return batch
 
 
-def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128):
+def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
         raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
@@ -434,7 +525,12 @@ def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', no
             output='power',
             n_jobs=-1
         )
-        power_spectrum = np.log(power_spectrum)
+
+        if baseline_correction:
+            baseline_mean = np.concatenate([sample_data['baseline_mean'] for sample_data in batch], axis=0)
+            power_spectrum = (power_spectrum - baseline_mean) / baseline_mean
+        else:
+            power_spectrum = np.log(power_spectrum)
 
         if normalization == 'minmax':
             power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
