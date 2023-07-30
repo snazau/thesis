@@ -7,6 +7,7 @@ from torch.utils.data._utils import collate
 
 import custom_distribution
 import eeg_reader
+import scripts.visualize_errors
 
 mne.set_log_level('error')
 
@@ -77,6 +78,16 @@ def extract_fp_times(prediction_data, threshold, sfreq):
     return fp_start_times
 
 
+def filter_fp_times(fp_start_times, seizures, min_deviation=30, min_start_time=900):
+    acceptable_fp_start_times = list()
+    for fp_start_time in fp_start_times:
+        min_fp_deviation = scripts.visualize_errors.get_min_deviation_from_seizure(seizures, fp_start_time)
+        if min_fp_deviation > min_deviation and fp_start_time > min_start_time:
+            acceptable_fp_start_times.append(fp_start_time)
+    acceptable_fp_start_times = np.array(acceptable_fp_start_times)
+    return acceptable_fp_start_times
+
+
 def extract_fn_times(prediction_data, threshold, sfreq):
     time_idxs_start = prediction_data['time_idxs_start']
     probs = prediction_data['probs_wo_tta']
@@ -86,6 +97,16 @@ def extract_fn_times(prediction_data, threshold, sfreq):
     fn_start_times = time_idxs_start[fn_mask] / sfreq
 
     return fn_start_times
+
+
+def filter_fn_times(fn_start_times, seizures, min_deviation=-1, min_start_time=900):
+    acceptable_fn_start_times = list()
+    for fn_start_time in fn_start_times:
+        min_fn_deviation = scripts.visualize_errors.get_min_deviation_from_seizure(seizures, fn_start_time)
+        if min_fn_deviation <= min_deviation and fn_start_time > min_start_time:
+            acceptable_fn_start_times.append(fn_start_time)
+    acceptable_fn_start_times = np.array(acceptable_fn_start_times)
+    return acceptable_fn_start_times
 
 
 class SubjectRandomDataset(torch.utils.data.Dataset):
@@ -231,11 +252,14 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         sample_start_times = mask * seizure_times + (1 - mask) * normal_times
 
         if self.prediction_data is not None:
-            fp_start_times = extract_fp_times(self.prediction_data, threshold=0.95, sfreq=self.raw.info['sfreq'])
-            fn_start_times = extract_fn_times(self.prediction_data, threshold=0.95, sfreq=self.raw.info['sfreq'])
+            fp_start_times = extract_fp_times(self.prediction_data, threshold=0.70, sfreq=self.raw.info['sfreq'])
+            fn_start_times = extract_fn_times(self.prediction_data, threshold=0.99, sfreq=self.raw.info['sfreq'])
 
-            fp_num_to_pick = min(len(fp_start_times), self.samples_num // 2)
+            fp_start_times = filter_fp_times(fp_start_times, self.seizures, min_deviation=300, min_start_time=900)
+            fn_start_times = filter_fn_times(fn_start_times, self.seizures, min_deviation=-1, min_start_time=900)
+
             fn_num_to_pick = min(len(fn_start_times), self.samples_num // 2)
+            fp_num_to_pick = min(len(fp_start_times), self.samples_num // 2, fn_num_to_pick)
 
             fp_picked_start_times = np.random.choice(fp_start_times, size=fp_num_to_pick, replace=False)
             fn_picked_start_times = np.random.choice(fn_start_times, size=fn_num_to_pick, replace=False)
