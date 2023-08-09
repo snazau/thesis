@@ -222,13 +222,14 @@ if __name__ == '__main__':
 
     # experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
     # experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm_validation_only'
-    experiment_name = '24072023_efficientnet_b0_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
+    # experiment_name = '24072023_efficientnet_b0_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
+    experiment_name = '30072023_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_continue'
     # experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'
     # experiment_name = 'renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug'
     visualizations_dir = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\visualizations'
     os.makedirs(visualizations_dir, exist_ok=True)
 
-    threshold = 0.99
+    threshold = 0.95
     # filter_method = None
     # k_size = -1
     filter_method = 'median'
