@@ -572,7 +572,7 @@ class SubjectInferenceDataset(torch.utils.data.Dataset):
         return sample
 
 
-def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False, transform=None):
+def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False, log=True, transform=None):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
         raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
@@ -588,7 +588,7 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
         if baseline_correction:
             baseline_mean = np.concatenate([sample_data['baseline_mean'] for sample_data in batch], axis=0)
             power_spectrum = (power_spectrum - baseline_mean) / baseline_mean
-        else:
+        elif log:
             power_spectrum = np.log(power_spectrum)
 
         if normalization == 'minmax':
@@ -608,7 +608,7 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
     return batch
 
 
-def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False):
+def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False, log=True):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
         raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
@@ -624,7 +624,7 @@ def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', no
         if baseline_correction:
             baseline_mean = np.concatenate([sample_data['baseline_mean'] for sample_data in batch], axis=0)
             power_spectrum = (power_spectrum - baseline_mean) / baseline_mean
-        else:
+        elif log:
             power_spectrum = np.log(power_spectrum)
 
         if normalization == 'minmax':
