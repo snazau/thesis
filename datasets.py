@@ -198,14 +198,18 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
 
         # calc stuff for baseline correction
         self.freqs = np.arange(1, 40.01, 0.1)
-        self.baseline_mean, self.baseline_std = get_baseline_stats(
-            self.raw,
-            baseline_length_in_seconds=500,
-            sfreq=self.raw.info['sfreq'],
-            freqs=self.freqs,
-        )
-        self.baseline_mean = self.baseline_mean[np.newaxis]
-        self.baseline_std = self.baseline_std[np.newaxis]
+        if self.baseline_correction:
+            self.baseline_mean, self.baseline_std = get_baseline_stats(
+               self.raw,
+               baseline_length_in_seconds=500,
+                sfreq=self.raw.info['sfreq'],
+                freqs=self.freqs,
+            )
+            self.baseline_mean = self.baseline_mean[np.newaxis]
+            self.baseline_std = self.baseline_std[np.newaxis]
+        else:
+            self.baseline_mean = [0]
+            self.baseline_std = [1]
 
         # set montage
         # print(self.raw.get_data().min(), self.raw.get_data().mean(), self.raw.get_data().max())
