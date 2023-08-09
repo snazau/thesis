@@ -123,7 +123,8 @@ if __name__ == '__main__':
         # 'data2/028tl Anonim-20191014_212520-20211122_175854',
         # 'data2/030tl Anonim-20190910_110631-20211122_180335',
         # 'data2/016tl Anonim-20210128_054911-20211122_163013',
-        # 'data2/023tl Anonim-20210110_080440-20211122_173058', 'data1/dataset15',
+        # 'data2/023tl Anonim-20210110_080440-20211122_173058',
+        'data1/dataset15',
         'data2/008tl Anonim-20210204_211327-20211122_160546',
         'data2/037tl Anonim-20191020_110036-20211122_223805', 'data1/dataset7',
         'data2/006tl Anonim-20210209_144403-20211122_155146',
@@ -139,8 +140,8 @@ if __name__ == '__main__':
         'data1/dataset18',
         'data2/026tl Anonim-20210302_093747-20211122_175031',
 
-        # stage_1
-        # part1
+        # # stage_1
+        # # part1
         # 'data2/038tl Anonim-20190821_113559-20211123_004935',
         # 'data2/027tl Anonim-20200309_195746-20211122_175315',
         # 'data1/dataset27',
@@ -155,19 +156,19 @@ if __name__ == '__main__':
         # 'data2/038tl Anonim-20190822_155119-20211123_005457',
         # 'data2/025tl Anonim-20210128_233211-20211122_173425',
         # 'data2/015tl Anonim-20201116_134129-20211122_161958',
-
-        # part2
+        #
+        # # part2
         # 'data1/dataset3',
         # 'data2/027tl Anonim-20200310_035747-20211122_175503',
         # 'data2/002tl Anonim-20200826_124513-20211122_135804', 'data1/dataset23',
         # 'data2/022tl Anonim-20201210_132636-20211122_172649', 'data1/dataset6', 'data1/dataset11',
         # 'data2/021tl Anonim-20201223_085255-20211122_172126', 'data1/dataset28',
-
-        # part 3
+        #
+        # # part 3
         # 'data1/dataset1',
         # 'data2/008tl Anonim-20210204_131328-20211122_160417',
         # 'data2/003tl Anonim-20200831_120629-20211122_140327',
-        # 'data1/dataset12',
+        # 'data1/dataset12',  # Failed because of memory
         # 'data2/025tl Anonim-20210129_073208-20211122_173728',
         # 'data2/038tl Anonim-20190822_131550-20211123_005257', 'data1/dataset2',
         #
@@ -236,39 +237,43 @@ if __name__ == '__main__':
 
         # stage_1 & stage_2
         # renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug & renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug
-        # prediction_config = {
-        #     'sfreq': 128,
-        #     'sample_duration': 10,
-        #     'shift': 10,
-        #     'data_type': 'power_spectrum',
-        #     'normalization': 'meanstd',
-        #     'batch_size': 16,
-        #     'device': torch.device('cuda:0'),
-        #     'tta_augs': ttg_augs,
-        # }
-
-        # 14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm
+        # 30072023_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_continue
         prediction_config = {
             'sfreq': 128,
             'sample_duration': 10,
             'shift': 10,
             'data_type': 'power_spectrum',
-            'normalization': 'minmax',
-            'baseline_correction': True,
+            'normalization': 'meanstd',
             'batch_size': 16,
             'device': torch.device('cuda:0'),
             'tta_augs': ttg_augs,
+            'baseline_correction': False,
         }
+
+        # # 14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm
+        # prediction_config = {
+        #     'sfreq': 128,
+        #     'sample_duration': 10,
+        #     'shift': 10,
+        #     'data_type': 'power_spectrum',
+        #     'normalization': 'minmax',
+        #     'baseline_correction': True,
+        #     'batch_size': 16,
+        #     'device': torch.device('cuda:0'),
+        #     'tta_augs': ttg_augs,
+        # }
 
         experiments_dir = r'D:\Study\asp\thesis\implementation\experiments'
         # experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'  # stage_1
         # experiment_name = 'renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug'  # stage_2
-        experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'  # stage_2
+        # experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
+        experiment_name = '30072023_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_continue'
         experiment_dir = os.path.join(experiments_dir, experiment_name)
         checkpoint_path = os.path.join(experiment_dir, 'checkpoints', 'best.pth.tar')
 
         state_dict = torch.load(checkpoint_path)['model']['state_dict']
-        model = utils.neural.training.get_model('resnet18', model_kwargs=dict())
+        # model = utils.neural.training.get_model('resnet18', model_kwargs=dict())
+        model = utils.neural.training.get_model('efficientnet_b0', model_kwargs=dict(pretrained=True))
         model.load_state_dict(state_dict)
         model = model.to(prediction_config['device'])
 
