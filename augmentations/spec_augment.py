@@ -76,8 +76,8 @@ if __name__ == "__main__":
     data_dir = '../data'
     # subject_key = 'data1/dataset28'
     # subject_key = 'data1/dataset2'
-    # subject_key = 'data2/038tl Anonim-20190821_113559-20211123_004935'
-    subject_key = 'data2/037tl Anonim-20191020_110036-20211122_223805'
+    subject_key = 'data2/038tl Anonim-20190821_113559-20211123_004935'
+    # subject_key = 'data2/037tl Anonim-20191020_110036-20211122_223805'
     subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
@@ -88,13 +88,14 @@ if __name__ == "__main__":
     spec_aug = SpecAugment(
         p_aug=1,
         p_mask=1,
-        max_freq_mask_width=40,
-        max_time_mask_width=128,
+        max_freq_mask_width=40 * 2,
+        max_time_mask_width=128 * 2,
         num_masks_per_channel=1,
         replace_with_zero=False,
     )
     sample = spec_aug(sample)
 
     import visualization
-    visualization.plot_spectrum_averaged(np.exp(sample['data'].cpu().numpy()), subject_dataset.freqs)
-    visualization.plot_spectrum_channels(sample['data'].cpu().numpy(), time_idx_from=0, time_idx_to=128 * 9)
+    # visualization.plot_spectrum_averaged(np.exp(sample['data'].cpu().numpy()), subject_dataset.freqs)
+    # visualization.plot_spectrum_channels(sample['data'].cpu().numpy(), time_idx_from=0, time_idx_to=128 * 10)
+    visualization.plot_spectrum_channel(sample['data'].cpu().numpy(), channel_idx=0, time_idx_from=0, time_idx_to=128 * 10)
