@@ -141,7 +141,9 @@ def run_training(config):
     pretrained_epochs_num = 0
     if 'pretrained_path' in config:
         checkpoint = utils.neural.training.load_checkpoint(config['pretrained_path'])
-        model.load_state_dict(checkpoint['model']['state_dict'])
+        state_dict = checkpoint['model']['state_dict']
+        state_dict = {f'model.{key}': value for key, value in state_dict.items()}
+        model.load_state_dict(state_dict)
 
         if 'optimizer' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer']['state_dict'])
