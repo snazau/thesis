@@ -602,6 +602,18 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
                 batch[sample_idx] = transform(batch[sample_idx])
             # batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx])
         # batch['data'] = torch.from_numpy(sample_data).float()
+    elif data_type == 'raw':
+        raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
+        if transform is not None:
+            raw_data = transform({'data': raw_data})['data']
+
+        if normalization == 'minmax':
+            raw_data = (raw_data - raw_data.min()) / (raw_data.max() - raw_data.min())
+        elif normalization == 'meanstd':
+            raw_data = (raw_data - raw_data.mean()) / raw_data.std()
+
+        for sample_idx in range(raw_data.shape[0]):
+            batch[sample_idx]['data'] = torch.unsqueeze(raw_data[sample_idx], dim=0).float()
 
     batch = torch.utils.data.dataloader.default_collate(batch)
 
@@ -634,6 +646,8 @@ def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', no
 
         for sample_idx in range(power_spectrum.shape[0]):
             batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx]).float()
+    elif data_type == 'raw':
+        pass  # TODO: Add TTA for raw data
 
     for sample_idx in range(len(batch)):
         original_data = batch[sample_idx]['data'].clone()
@@ -665,7 +679,7 @@ if __name__ == '__main__':
     import time
     import utils.neural.training
     device = torch.device('cuda:0')
-    model = utils.neural.training.get_model(model_name='resnet18', model_kwargs={'pretrained': True}).to(device)
+    model = utils.neural.training.get_model(model_name='resnet18_1channel', model_kwargs={'pretrained': True}).to(device)
     model.eval()
 
     # subject_dataset = SubjectRandomDataset(
@@ -697,7 +711,21 @@ if __name__ == '__main__':
     subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, data_type='raw')
     # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10, data_type='raw')
     from functools import partial
-    collate_fn = partial(custom_collate_function, data_type='power_spectrum', normalization=None, baseline_correction=True)
+    # collate_fn = partial(custom_collate_function, data_type='power_spectrum', normalization=None, baseline_correction=True)
+    import torchvision
+    import augmentations.ts_augments
+    collate_fn = partial(
+        custom_collate_function,
+        data_type='raw',
+        normalization='meanstd',
+        baseline_correction=False,
+        transform=torchvision.transforms.Compose([
+            augmentations.ts_augments.AddNoise(p=0.5),
+            augmentations.ts_augments.TimeWarp(p=0.5),
+            augmentations.ts_augments.Drift(p=0.5),
+            augmentations.ts_augments.Crop(p=0.5),
+        ])
+    )
     loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16, collate_fn=collate_fn)
     torch.cuda.synchronize()
     time_start = time.time()
