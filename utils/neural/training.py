@@ -31,6 +31,8 @@ def get_model(model_name, model_kwargs):
         model = models.resnet.EEGResNet18Raw(**model_kwargs)
     elif model_name == 'efficientnet_b0':
         model = models.efficientnet.EEGEfficientNetB0Spectrum(**model_kwargs)
+    elif model_name == 'efficientnet_b0_1channel':
+        model = models.efficientnet.EEGEfficientNetB0Raw(**model_kwargs)
     else:
         raise NotImplementedError
 
