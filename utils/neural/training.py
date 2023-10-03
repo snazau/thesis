@@ -7,6 +7,7 @@ import sklearn.metrics
 import torch
 import torch.utils.data
 
+import criterions
 import datasets
 import metrics.calib
 import models.resnet
@@ -16,7 +17,9 @@ import utils.neural.mixing
 
 def get_criterion(criterion_name, criterion_kwargs):
     if criterion_name == 'BCE':
-        criterion = torch.nn.BCEWithLogitsLoss(**criterion_kwargs)
+        criterion = criterions.BCELoss(**criterion_kwargs)
+    elif criterion_name == 'BCELossWithTimeToClosestSeizure':
+        criterion = criterions.BCELossWithTimeToClosestSeizure(**criterion_kwargs)
     elif criterion_name == 'FocalBCE':
         raise NotImplementedError
     else:
@@ -90,23 +93,28 @@ def get_loader(datasets_list, loader_kwargs):
     return loader
 
 
-def forward(strategy_name, strategy_kwargs, model, inputs, labels, criterion):
+def forward(strategy_name, strategy_kwargs, model, batch, criterion):
     if strategy_name.lower() == 'mixup':
-        mixed_inputs, labels, labels_shuffled, lam = utils.neural.mixing.mixup(inputs, labels, **strategy_kwargs)
-        outputs = model(mixed_inputs)
-        loss = lam * criterion(outputs, labels.float().unsqueeze(1)) + (1 - lam) * criterion(
-            outputs,
-            labels_shuffled.float().unsqueeze(1)
-        )
+        mixed_inputs, labels, labels_shuffled, lam = utils.neural.mixing.mixup(batch['data'], batch['target'], **strategy_kwargs)
+        batch['outputs'] = model(mixed_inputs)
+
+        loss = lam * criterion(batch)
+
+        batch_copy = {
+            key: value.clone() if hasattr(value, 'clone') else value
+            for key, value in batch.items()
+        }
+        batch_copy['labels'] = labels_shuffled
+        loss += (1 - lam) * criterion(batch_copy)
     elif strategy_name.lower() == 'fmix':
         raise NotImplementedError
     elif strategy_name.lower() == 'default':
-        outputs = model(inputs)
-        loss = criterion(outputs, labels.float().unsqueeze(1))
+        batch['outputs'] = model(batch['data'])
+        loss = criterion(batch)
     else:
         raise NotImplementedError
 
-    return outputs, loss
+    return batch['outputs'], loss
 
 
 def calc_metric(function, labels, preds):

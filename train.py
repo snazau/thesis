@@ -21,18 +21,18 @@ def train(strategy_name, strategy_params, loader, model, criterion, optimizer, e
         for batch_idx, batch in enumerate(tqdm_wrapper):
             tqdm_wrapper.set_description(f'Epoch {epoch:03}')
 
-            inputs = batch["data"].to(device)
-            labels = batch["target"].to(device)
+            batch["data"] = batch["data"].to(device)
+            batch["target"] = batch["target"].to(device)
 
             optimizer.zero_grad()
-            outputs, loss = utils.neural.training.forward(strategy_name, strategy_params, model, inputs, labels, criterion)
+            outputs, loss = utils.neural.training.forward(strategy_name, strategy_params, model, batch, criterion)
             loss.backward()
             optimizer.step()
 
             loss_avg_meter.update(loss.item())
 
             probs = torch.sigmoid(outputs)
-            all_labels = np.concatenate([all_labels, labels.cpu().detach().numpy()])
+            all_labels = np.concatenate([all_labels, batch["target"].cpu().detach().numpy()])
             all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
 
             tqdm_wrapper.set_postfix(loss=loss_avg_meter.avg)
@@ -59,19 +59,19 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
     loss_avg_meter = utils.avg_meters.AverageMeter()
     with tqdm.tqdm(loader) as tqdm_wrapper:
         for batch_idx, batch in enumerate(tqdm_wrapper):
-            inputs = batch["data"].to(device)
-            labels = batch["target"].to(device)
-            start_times = batch["start_time"].to(device)
+            batch["data"] = batch["data"].to(device)
+            batch["target"] = batch["target"].to(device)
+            batch["start_time"] = batch["start_time"].to(device)
 
             with torch.no_grad():
-                outputs, loss = utils.neural.training.forward('default', {}, model, inputs, labels, criterion)
+                outputs, loss = utils.neural.training.forward('default', {}, model, batch, criterion)
                 probs = torch.sigmoid(outputs)
 
             loss_avg_meter.update(loss.item())
 
-            all_labels = np.concatenate([all_labels, labels.cpu().detach().numpy()])
+            all_labels = np.concatenate([all_labels, batch["target"].cpu().detach().numpy()])
             all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
-            all_start_times = np.concatenate([all_start_times, start_times.cpu().detach().numpy()])
+            all_start_times = np.concatenate([all_start_times, batch["start_time"].cpu().detach().numpy()])
 
             tqdm_wrapper.set_postfix(loss=loss_avg_meter.avg)
 

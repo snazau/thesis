@@ -17,6 +17,29 @@ def check_if_in_segments(time_point, segments):
     return any([segment['start'] <= time_point <= segment['end'] for segment in segments])
 
 
+def calc_time_to_closest_seizure(time_point, seizures):
+    is_inside = False
+    time_to_closest_seizure = 1e9
+    for seizure in seizures:
+        time_to_seizure = abs(time_point - seizure['start'])
+        if time_to_seizure < time_to_closest_seizure:
+            time_to_closest_seizure = time_to_seizure
+            is_inside = seizure['start'] <= time_point <= seizure['end']
+
+        time_to_seizure = abs(time_point - seizure['end'])
+        if time_to_seizure < time_to_closest_seizure:
+            time_to_closest_seizure = time_to_seizure
+            is_inside = seizure['start'] <= time_point <= seizure['end']
+
+    return time_to_closest_seizure, is_inside
+
+
+def calc_signed_time_to_closest_seizure(time_point, seizures):
+    time_to_closest_seizure, is_inside = calc_time_to_closest_seizure(time_point, seizures)
+    time_to_closest_seizure = -abs(time_to_closest_seizure) if is_inside else abs(time_to_closest_seizure)
+    return time_to_closest_seizure
+
+
 def generate_raw_samples(raw_eeg, sample_start_times, sample_duration):
     # if mask is not None:
     #     my_annot = mne.Annotations(
@@ -243,7 +266,15 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         # print(f'seizures = {self.seizures}')
         # print(f'normal_segments = {self.normal_segments}')
 
-        self.mask, self.sample_start_times, self.targets, self.raw_samples, self.time_idxs_start, self.time_idxs_end = self._generate_data()
+        (
+            self.mask,
+            self.sample_start_times,
+            self.targets,
+            self.raw_samples,
+            self.time_idxs_start,
+            self.time_idxs_end,
+            self.times_to_closest_seizure
+        ) = self._generate_data()
         # print(f'self.raw_samples.shape = {self.raw_samples.shape}')
 
     def __len__(self):
@@ -296,6 +327,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             'channel_name_to_idx': self.channel_name_to_idx,
             'baseline_mean': self.baseline_mean,
             'baseline_std': self.baseline_std,
+            'time_to_closest_seizure': self.times_to_closest_seizure[idx],
         }
 
         if self.stats_data is not None:
@@ -330,7 +362,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
 
         # generate samples
         mask = np.random.uniform(size=self.samples_num) > self.normal_samples_fraction
-        targets = mask.astype(np.int)
+        targets = mask.astype(int)
         sample_start_times = mask * seizure_times + (1 - mask) * normal_times
 
         if self.prediction_data is not None:
@@ -363,9 +395,15 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             sample_start_times = sample_start_times[random_permutation]
             targets = targets[random_permutation]
 
+        # get time to closest seizure
+        times_to_closest_seizure = [
+            calc_signed_time_to_closest_seizure(sample_start_time, self.seizures)
+            for sample_start_time in sample_start_times
+        ]
+
         raw_samples, time_idxs_start, time_idxs_end = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
 
-        return mask, sample_start_times, targets, raw_samples, time_idxs_start, time_idxs_end
+        return mask, sample_start_times, targets, raw_samples, time_idxs_start, time_idxs_end, times_to_closest_seizure
 
     def renew_data(self):
         (
@@ -374,7 +412,8 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             self.targets,
             self.raw_samples,
             self.time_idxs_start,
-            self.time_idxs_end
+            self.time_idxs_end,
+            self.times_to_closest_seizure,
         ) = self._generate_data()
 
 
