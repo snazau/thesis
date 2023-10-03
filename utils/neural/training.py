@@ -8,6 +8,7 @@ import torch
 import torch.utils.data
 
 import datasets
+import metrics.calib
 import models.resnet
 import models.efficientnet
 import utils.neural.mixing
@@ -122,7 +123,15 @@ def calc_metrics_diff_thresholds(probs, labels):
     precision_pr, recall_pr, _ = sklearn.metrics.precision_recall_curve(labels, probs)
     auc_pr = sklearn.metrics.auc(recall_pr, precision_pr)
 
-    metric_dict = {'auc_roc': {'auc_roc': auc_roc}, 'auc_pr': {'auc_pr': auc_pr}}
+    brier_score = sklearn.metrics.brier_score_loss(labels, probs)
+    calib_mean, calib_std = metrics.calib.fast_calibration_report(labels, probs, nbins=100, show_plots=False)
+
+    metric_dict = {
+        'auc_roc': {'auc_roc': auc_roc},
+        'auc_pr': {'auc_pr': auc_pr},
+        'brier_score': {'brier_score': brier_score},
+        'calib_score': {'calib_score': calib_mean},
+    }
     metric_names = ['accuracy_score', 'f1_score', 'precision_score', 'recall_score', 'cohen_kappa_score']
     thresholds = [0.01] + list(np.arange(0.05, 0.99, 0.05)) + [0.99]
     for threshold in thresholds:
@@ -146,6 +155,9 @@ def calc_metrics(probs, labels, threshold=0.5):
     precision_pr, recall_pr, _ = sklearn.metrics.precision_recall_curve(labels, probs)
     auc_pr = sklearn.metrics.auc(recall_pr, precision_pr)
 
+    brier_score = sklearn.metrics.brier_score_loss(labels, probs)
+    calib_mean, calib_std = metrics.calib.fast_calibration_report(labels, probs, nbins=100, show_plots=False)
+
     preds = probs > threshold
     accuracy_combined = calc_metric(sklearn.metrics.accuracy_score, labels, preds)
     f1_score = calc_metric(sklearn.metrics.f1_score, labels, preds)
@@ -156,6 +168,8 @@ def calc_metrics(probs, labels, threshold=0.5):
     accuracy_class = np.sum(labels[labels == 1] * preds[labels == 1]) / np.sum(labels)
 
     metric_dict = {
+        'brier_score': brier_score,
+        'calib_score': calib_mean,
         'accuracy_combined': accuracy_combined,
         'accuracy_class': accuracy_class,
         'f1_score': f1_score,
