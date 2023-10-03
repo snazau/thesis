@@ -1,6 +1,8 @@
 import torch
 import timm
 
+import models.gradcam
+
 
 class EEGEfficientNetB0Spectrum(torch.nn.Module):
     def __init__(self, pretrained=False):
@@ -46,3 +48,27 @@ class EEGEfficientNetB0Raw(torch.nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+    def interpret(self, x, layer='model.conv_head'):
+        # x.shape = (B, 1, C, T)
+
+        gcam = models.gradcam.GradCAM(self, candidate_layers=None)
+        gcam.forward(x)
+
+        pred_class_id = torch.tensor(0)
+        gcam.backward(ids=pred_class_id)
+
+        heatmap = gcam.generate(target_layer=layer)
+
+        return heatmap
+
+
+if __name__ == '__main__':
+    model = EEGEfficientNetB0Raw(pretrained=False)
+    print(model)
+    print(model.model.conv_head)
+    exit()
+
+    import models.resnet
+    model = models.resnet.EEGResNet18Raw(pretrained=False)
+    print(model)
