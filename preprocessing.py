@@ -107,14 +107,14 @@ if __name__ == '__main__':
         # if subject_key not in ['data1/dataset16', 'data2/037tl Anonim-20201102_102725-20211123_003801']:
         #     continue
 
-        if subject_key != 'data1/dataset16':
-            continue
+        # if subject_key != 'data1/dataset16':
+        #     continue
 
         # if subject_key != 'data2/037tl Anonim-20201102_102725-20211123_003801':
         #     continue
 
-        # if 'data1' in subject_key:
-        #     continue
+        if 'data2' in subject_key:
+            continue
 
         if 'data1' in subject_key:
             # picks = 'all'
