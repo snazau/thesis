@@ -67,7 +67,7 @@ class GradCAM(_BaseWrapper):
         # If any candidates are not specified, the hook is registered to all the layers. # noqa E501
         for name, module in self.model.named_modules():
             if self.candidate_layers is None or name in self.candidate_layers:
-                print(name)
+                # print(name)
                 self.handlers.append(module.register_forward_hook(forward_hook(name)))
                 self.handlers.append(module.register_backward_hook(backward_hook(name)))
 
