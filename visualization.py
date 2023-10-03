@@ -153,29 +153,36 @@ def plot_spectrum_averaged(power_spectrum, freqs):
     plt.show()
 
 
-def visualize_raw(raw_signal, channel_names, time_start=0, save_dir=None):
+def visualize_raw(raw_signal, channel_names, seizure_idxs, heatmap=None, time_start=0, save_path=None, trim_channels=True):
     # raw_signal.shape = (C, T)
+    # heatmap.shape = (C, T)
 
     # fig, axes = plt.subplots(raw_signal.shape[0], figsize=(15, 10))
     # fig.suptitle(f'raw_signal')
-    # for i in range(raw_signal.shape[0]):
+    # for channel_idx in range(raw_signal.shape[0]):
     #
     #     time_values = np.linspace(0, raw_signal.shape[1] / 128, raw_signal.shape[1])
-    #     axes[i].plot(time_values, raw_signal[i])
-    #     axes[i].set_xlim([0, raw_signal.shape[1] / 128])
-    #     axes[i].set_xlabel('Time (s)')
+    #     axes[channel_idx].plot(time_values, raw_signal[channel_idx])
+    #     axes[channel_idx].set_xlim([0, raw_signal.shape[1] / 128])
+    #     axes[channel_idx].set_xlabel('Time (s)')
     #     # axes[0].set_ylabel('Freq. (Hz)')
-    #     # axes[1].imshow(power_spectrum[i], cmap=plt.cm.Reds, interpolation='none', extent=[0, 10, 40, 0])
+    #     # axes[1].imshow(power_spectrum[channel_idx], cmap=plt.cm.Reds, interpolation='none', extent=[0, 10, 40, 0])
     #     # plt.show()
     #
     #     # if save_dir is not None:
-    #     #     save_path = os.path.join(save_dir, f'{channel_names[i]}.png')
+    #     #     save_path = os.path.join(save_dir, f'{channel_names[channel_idx]}.png')
     #     #     os.makedirs(save_dir, exist_ok=True)
     #     #     plt.savefig(save_path, dpi=300)
     #
     #     # fig.clear()
     #     # plt.close(fig)
     # plt.show()
+
+    # normalize heatmap
+    if heatmap is not None:
+        heatmap = (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min())
+        import matplotlib.cm as cm
+        colors = cm.plasma(heatmap)
 
     from matplotlib import gridspec
     nrow, ncol = raw_signal.shape[0], 1
@@ -192,12 +199,14 @@ def visualize_raw(raw_signal, channel_names, time_start=0, save_dir=None):
         right=0.845,
     )
 
-    for i in range(raw_signal.shape[0]):
+    for channel_idx in range(raw_signal.shape[0]):
         time_values = np.linspace(time_start, time_start + raw_signal.shape[1] / 128, raw_signal.shape[1])
-        ax = plt.subplot(gs[i, 0])
+        ax = plt.subplot(gs[channel_idx, 0])
         ax.set_xlim([time_start, time_start + raw_signal.shape[1] / 128])
         # ax.set_xticklabels([])
-        ax.set_ylabel(channel_names[i][4:])
+
+        channel_name = channel_names[channel_idx][4:] if trim_channels else channel_names[channel_idx]
+        ax.set_ylabel(channel_name)
 
         ax.tick_params(
             axis='y',  # changes apply to the x-axis
@@ -206,7 +215,7 @@ def visualize_raw(raw_signal, channel_names, time_start=0, save_dir=None):
             right=False,  # ticks along the top edge are off
             labelleft=False,  # labels along the bottom edge are off
         )
-        if i != (raw_signal.shape[0] - 1):
+        if channel_idx != (raw_signal.shape[0] - 1):
             ax.tick_params(
                 axis='x',  # changes apply to the x-axis
                 which='both',  # both major and minor ticks are affected
@@ -217,11 +226,56 @@ def visualize_raw(raw_signal, channel_names, time_start=0, save_dir=None):
         else:
             ax.set_xlabel('Time (s)')
 
-        ax.plot(time_values, raw_signal[i])
+        if seizure_idxs is not None:
+            ax.axvline(x=seizure_idxs['start'], color='r', label='Seizure start')
+            ax.axvline(x=seizure_idxs['end'], color='r', label='Seizure end')
 
-    if save_dir is not None:
-        save_path = os.path.join(save_dir, f'raw_signal.png')
-        os.makedirs(save_dir, exist_ok=True)
+        if heatmap is not None:
+            for time_idx in np.arange(len(time_values) - 1):
+                im = ax.plot(
+                    [time_values[time_idx], time_values[time_idx + 1]],
+                    [raw_signal[channel_idx][time_idx], raw_signal[channel_idx][time_idx + 1]],
+                    c=colors[channel_idx][time_idx],
+                )
+        else:
+            ax.plot(time_values, raw_signal[channel_idx])
+
+    if heatmap is not None:
+        fig.colorbar(cm.ScalarMappable(norm=None, cmap=cm.get_cmap("plasma")), ax=fig.axes)
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, dpi=300)
     else:
         plt.show()
+
+    plt.clf()
+
+
+if __name__ == '__main__':
+    import matplotlib.cm as cm
+    import matplotlib.pyplot as plt
+
+
+    def plot_colourline(x, y, c):
+        col = cm.jet((c - np.min(c)) / (np.max(c) - np.min(c)))
+        ax = plt.gca()
+        for i in np.arange(len(x) - 1):
+            ax.plot([x[i], x[i + 1]], [y[i], y[i + 1]], c=col[i])
+        im = ax.scatter(x, y, c=c, s=0, cmap=cm.jet)
+        return im
+
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    n = 100
+    x = 1. * np.arange(n)
+    y = np.random.rand(n)
+    prop = x ** 2
+
+    fig = plt.figure(1, figsize=(5, 5))
+    ax = fig.add_subplot(111)
+    im = plot_colourline(x, y, prop)
+    fig.colorbar(im)
+    plt.show()
