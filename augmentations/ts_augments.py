@@ -88,8 +88,8 @@ if __name__ == "__main__":
         subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
         subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
-        import datasets
-        subject_dataset = datasets.SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, normalization=None, data_type='raw')
+        import datasets.datasets_static.datasets_static
+        subject_dataset = datasets.datasets_static.SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, normalization=None, data_type='raw')
 
         sample = subject_dataset[0]  # (B, C, T)
         print('orig', sample['data'].shape)

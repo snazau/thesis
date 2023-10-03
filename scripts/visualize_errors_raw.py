@@ -6,7 +6,7 @@ import mne
 import numpy as np
 
 import eeg_reader
-import datasets
+import datasets.datasets_static
 import torch
 import utils.neural.training
 import visualization
@@ -58,7 +58,7 @@ def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names
 
     # baseline correction preparation
     freqs = np.arange(1, 40.01, 0.1)
-    baseline_mean, baseline_std = datasets.get_baseline_stats(
+    baseline_mean, baseline_std = datasets.datasets_static.get_baseline_stats(
         raw_data,
         baseline_length_in_seconds=500,
         sfreq=raw_data.info['sfreq'],
@@ -80,7 +80,7 @@ def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names
     if best_fp_time_idx_start != -1:
         fp_start_times = [best_fp_time_idx_start / sfreq]
         fp_probs = [best_fp_prob]
-        fp_samples, _, _ = datasets.generate_raw_samples(raw_data, fp_start_times, sample_duration=10)
+        fp_samples, _, _ = datasets.datasets_static.generate_raw_samples(raw_data, fp_start_times, sample_duration=10)
 
         visualize_samples_raw(
             fp_samples,
@@ -107,7 +107,7 @@ def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names
     if best_fn_time_idx_start != -1:
         fn_start_times = [best_fn_time_idx_start / sfreq]
         fn_probs = [best_fn_prob]
-        fn_samples, _, _ = datasets.generate_raw_samples(raw_data, fn_start_times, sample_duration=10)
+        fn_samples, _, _ = datasets.datasets_static.generate_raw_samples(raw_data, fn_start_times, sample_duration=10)
 
         visualize_samples_raw(
             fn_samples,
@@ -133,7 +133,7 @@ def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names
     if best_tp_time_idx_start != -1:
         tp_start_times = [best_tp_time_idx_start / sfreq]
         tp_probs = [best_tp_prob]
-        tp_samples, _, _ = datasets.generate_raw_samples(raw_data, tp_start_times, sample_duration=10)
+        tp_samples, _, _ = datasets.datasets_static.generate_raw_samples(raw_data, tp_start_times, sample_duration=10)
 
         visualize_samples_raw(
             tp_samples,
@@ -209,7 +209,7 @@ if __name__ == '__main__':
 
         eeg_file_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
         raw_data = eeg_reader.EEGReader.read_eeg(eeg_file_path)
-        datasets.drop_unused_channels(eeg_file_path, raw_data)
+        datasets.datasets_static.drop_unused_channels(eeg_file_path, raw_data)
         channel_names = raw_data.info['ch_names']
 
         set_visualizations_dir = os.path.join(visualizations_dir)

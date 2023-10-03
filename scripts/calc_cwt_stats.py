@@ -7,7 +7,7 @@ import mne
 import numpy as np
 import torch
 
-import datasets
+import datasets.datasets_static
 import eeg_reader
 
 
@@ -27,7 +27,7 @@ def calc_stats_v2(subject_eeg_path, baseline_length_in_seconds=500):
 
     # sample_start_times = np.arange(min_time, max_time - baseline_length_in_seconds, baseline_length_in_seconds // 2)
     sample_start_times = np.arange(min_time, max_time - baseline_length_in_seconds, max(baseline_length_in_seconds, max_time // baseline_length_in_seconds))
-    samples, _, _ = datasets.generate_raw_samples(
+    samples, _, _ = datasets.datasets_static.generate_raw_samples(
         raw_data,
         sample_start_times,
         baseline_length_in_seconds
@@ -55,7 +55,7 @@ def calc_stats_v2(subject_eeg_path, baseline_length_in_seconds=500):
 
 
 def calc_stats(subject_eeg_path, subject_seizures):
-    subject_dataset = datasets.SubjectRandomDataset(
+    subject_dataset = datasets.datasets_static.SubjectRandomDataset(
         subject_eeg_path,
         subject_seizures,
         samples_num=100,
@@ -67,7 +67,7 @@ def calc_stats(subject_eeg_path, subject_seizures):
     )
 
     collate_fn = partial(
-        datasets.custom_collate_function,
+        datasets.datasets_static.custom_collate_function,
         data_type='power_spectrum',
         baseline_correction=False,
         log=True,

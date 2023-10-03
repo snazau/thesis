@@ -10,7 +10,7 @@ import tqdm
 
 import augmentations.flip
 import augmentations.spec_augment
-import datasets
+import datasets.datasets_static
 import utils.neural.training
 from utils.neural import training
 
@@ -32,20 +32,20 @@ def predict(model, rough_model_prediction_data, subject_eeg_path, subject_seizur
         threshold=config['rough_model_threshold'],
         sfreq=config['sfreq']
     )
-    subject_dataset = datasets.SubjectInferenceDataset(
+    subject_dataset = datasets.datasets_static.SubjectInferenceDataset(
         subject_eeg_path,
         positive_start_times,
         sample_duration=config['sample_duration'],
         data_type='raw'
     )
     # collate_fn = partial(
-    #     datasets.custom_collate_function,
+    #     datasets.datasets_static.custom_collate_function,
     #     normalization=config['normalization'],
     #     transform=None,
     #     data_type=config['data_type'],
     # )
     collate_fn = partial(
-        datasets.tta_collate_function,
+        datasets.datasets_static.tta_collate_function,
         tta_augs=config['tta_augs'],
         normalization=config['normalization'],
         data_type=config['data_type'],

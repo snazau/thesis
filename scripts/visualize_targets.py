@@ -1,7 +1,7 @@
 import json
 import os
 
-import datasets
+import datasets.datasets_static
 import eeg_reader
 import visualization
 
@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
         raw_data = eeg_reader.EEGReader.read_eeg(subject_eeg_path)
         channel_names = raw_data.info['ch_names']
-        datasets.drop_unused_channels(subject_eeg_path, raw_data)
+        datasets.datasets_static.drop_unused_channels(subject_eeg_path, raw_data)
 
         for seizure_idx, seizure in enumerate(subject_seizures):
             try:
@@ -38,7 +38,7 @@ if __name__ == '__main__':
                 if (start_time + duration) > recording_duration:
                     duration = duration - (start_time + duration - recording_duration) - 1
 
-                seizure_sample, _, _ = datasets.generate_raw_samples(
+                seizure_sample, _, _ = datasets.datasets_static.generate_raw_samples(
                     raw_data,
                     sample_start_times=[start_time],
                     sample_duration=duration,

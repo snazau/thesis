@@ -8,7 +8,7 @@ import torch
 import torch.utils.data
 
 import criterions
-import datasets
+import datasets.datasets_static
 import metrics.calib
 import models.resnet
 import models.efficientnet
@@ -73,7 +73,7 @@ def get_datasets(data_dir, dataset_info_path, subject_keys, prediction_data_dir,
         #     prediction_data_path = None
 
         if dataset_class_name == 'SubjectPreprocessedDataset':
-            subject_dataset = datasets.SubjectPreprocessedDataset(
+            subject_dataset = datasets.datasets_static.SubjectPreprocessedDataset(
                 preprocessed_dir=os.path.join(data_dir, f'{subject_key.split("/")[1]}'),
                 seizures=subject_seizures,
                 **dataset_kwargs,
