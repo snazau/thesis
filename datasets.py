@@ -200,8 +200,8 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.freqs = np.arange(1, 40.01, 0.1)
         if self.baseline_correction:
             self.baseline_mean, self.baseline_std = get_baseline_stats(
-               self.raw,
-               baseline_length_in_seconds=500,
+                self.raw,
+                baseline_length_in_seconds=500,
                 sfreq=self.raw.info['sfreq'],
                 freqs=self.freqs,
             )
