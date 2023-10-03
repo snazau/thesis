@@ -772,7 +772,6 @@ def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', no
 
 if __name__ == '__main__':
     import json
-    import os
 
     dataset_info_path = './data/dataset_info.json'
     with open(dataset_info_path) as f:
@@ -785,12 +784,51 @@ if __name__ == '__main__':
     # subject_key = 'data2/003tl Anonim-20200831_040629-20211122_135924'
     subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
     subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
+    stats_path = os.path.join(data_dir, 'cwt_log_stats_v2', subject_key + '.npy')
+
+    # import augmentations.flip
+    # import augmentations.spec_augment
+    # import torchvision.transforms
+    # subject_dataset = SubjectPreprocessedDataset(
+    #     # preprocessed_dir=f'D:\\Study\\asp\\thesis\\implementation\\data_ocsvm_cwt\\{subject_key.split("/")[1]}',
+    #     preprocessed_dir=f'C:\\data\\{subject_key.split("/")[1]}',
+    #     seizures=subject_seizures,
+    #     normalization='meanstd',
+    #     transform=torchvision.transforms.Compose([
+    #         augmentations.flip.TimeFlip(p=0.5),
+    #         augmentations.spec_augment.SpecAugment(
+    #             p_aug=0.5,
+    #             p_mask=0.5,
+    #             max_freq_mask_width=40,
+    #             max_time_mask_width=128,
+    #             num_masks_per_channel=1,
+    #             replace_with_zero=False,
+    #         ),
+    #     ]),
+    # )
+    # sample = subject_dataset[0]
+    # # exit()
 
     import time
     import utils.neural.training
     device = torch.device('cuda:0')
-    model = utils.neural.training.get_model(model_name='resnet18_1channel', model_kwargs={'pretrained': True}).to(device)
+    # model = utils.neural.training.get_model(model_name='resnet18_1channel', model_kwargs={'pretrained': True}).to(device)
+    model = utils.neural.training.get_model(model_name='resnet18', model_kwargs={'pretrained': True}).to(device)
     model.eval()
+
+    # loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16, collate_fn=torch.utils.data.dataloader.default_collate)
+    # torch.cuda.synchronize()
+    # time_start = time.time()
+    # for batch_idx, batch in enumerate(loader):
+    #     with torch.no_grad():
+    #         output = model(batch['data'].to(device))
+    #     print(f'\rProgress {batch_idx + 1}/{len(loader)}', end='')
+    #     if batch_idx > 20:
+    #         break
+    # torch.cuda.synchronize()
+    # time_elapsed = time.time() - time_start
+    # print(f'\ntime_elapsed = {time_elapsed}')
+    # exit()
 
     # subject_dataset = SubjectRandomDataset(
     #     subject_eeg_path,
@@ -818,7 +856,15 @@ if __name__ == '__main__':
     # time_elapsed = time.time() - time_start
     # print(f'\ntime_elapsed = {time_elapsed}')
 
-    subject_dataset = SubjectRandomDataset(subject_eeg_path, subject_seizures, samples_num=100, sample_duration=10, data_type='raw')
+    subject_dataset = SubjectRandomDataset(
+        subject_eeg_path,
+        subject_seizures,
+        stats_path=stats_path,
+        samples_num=100,
+        sample_duration=10,
+        data_type='raw',
+        baseline_correction=True,
+    )
     # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10, data_type='raw')
     from functools import partial
     # collate_fn = partial(custom_collate_function, data_type='power_spectrum', normalization=None, baseline_correction=True)
@@ -826,14 +872,14 @@ if __name__ == '__main__':
     import augmentations.ts_augments
     collate_fn = partial(
         custom_collate_function,
-        data_type='raw',
-        normalization='meanstd',
+        data_type='power_spectrum',
+        normalization='cwt_meanstd',
         baseline_correction=False,
         transform=torchvision.transforms.Compose([
-            augmentations.ts_augments.AddNoise(p=0.5),
-            augmentations.ts_augments.TimeWarp(p=0.5),
-            augmentations.ts_augments.Drift(p=0.5),
-            augmentations.ts_augments.Crop(p=0.5),
+            # augmentations.ts_augments.AddNoise(p=0.5),
+            # augmentations.ts_augments.TimeWarp(p=0.5),
+            # augmentations.ts_augments.Drift(p=0.5),
+            # augmentations.ts_augments.Crop(p=0.5),
         ])
     )
     loader = torch.utils.data.DataLoader(subject_dataset, batch_size=16, collate_fn=collate_fn)
@@ -848,6 +894,7 @@ if __name__ == '__main__':
     torch.cuda.synchronize()
     time_elapsed = time.time() - time_start
     print(f'\ntime_elapsed = {time_elapsed}')
+    exit()
 
     subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10)
     for idx in range(1):

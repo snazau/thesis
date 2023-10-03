@@ -231,9 +231,14 @@ if __name__ == '__main__':
     # experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
     # experiment_name = '14062023_resnet18_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm_validation_only'
     # experiment_name = '24072023_efficientnet_b0_all_subjects_SpecTimeFlipEEGFlipAug_baseline_correction_minmax_norm'
-    experiment_name = '30072023_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_continue'
+    # experiment_name = '30072023_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_continue'
+    # experiment_name = '08082023_efficientnet_b0_all_subjects_MixUp_TimeSeriesAug_raw'
+    # experiment_name = '14082023_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_preprocessed_ocsvm'
+    # experiment_name = '20230821_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_cwt_meanstd'
     # experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'
     # experiment_name = 'renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug'
+    # experiment_name = '20230912_efficientnet_b0_all_subjects_SpecTimeFlipEEGFlipAug_log_power_BCELossWithTimeToClosestSeizure'
+    experiment_name = '20230925_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_16excluded'
     visualizations_dir = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\visualizations'
     os.makedirs(visualizations_dir, exist_ok=True)
 
@@ -242,6 +247,7 @@ if __name__ == '__main__':
     # k_size = -1
     filter_method = 'median'
     k_size = 7
+    print(experiment_name)
     print(f'threshold = {threshold:03.2f} filter={filter_method} k={k_size}')
     subject_keys = [
         # # 'data2/038tl Anonim-20190821_113559-20211123_004935'
@@ -272,13 +278,13 @@ if __name__ == '__main__':
         'data1/dataset3',
         'data2/027tl Anonim-20200310_035747-20211122_175503',
         'data2/002tl Anonim-20200826_124513-20211122_135804', 'data1/dataset23',
-        'data2/022tl Anonim-20201210_132636-20211122_172649', 'data1/dataset6', 'data1/dataset11',
+        'data2/022tl Anonim-20201210_132636-20211122_172649',
+        'data1/dataset6', 'data1/dataset11',
         'data2/021tl Anonim-20201223_085255-20211122_172126', 'data1/dataset28',
 
         # part3
-        'data1/dataset1',
         'data2/008tl Anonim-20210204_131328-20211122_160417',
-        'data2/003tl Anonim-20200831_120629-20211122_140327', 'data1/dataset12',
+        'data2/003tl Anonim-20200831_120629-20211122_140327',
         'data2/025tl Anonim-20210129_073208-20211122_173728',
         'data2/038tl Anonim-20190822_131550-20211123_005257', 'data1/dataset2',
 
@@ -293,6 +299,8 @@ if __name__ == '__main__':
         'data2/035tl Anonim-20210324_151211-20211122_222545',
         'data2/038tl Anonim-20190822_203419-20211123_005705', 'data1/dataset25', 'data1/dataset5',
         'data2/018tl Anonim-20201215_022951-20211122_165644',
+        'data1/dataset1',
+        'data1/dataset12',
 
         # # stage_2
         # 'data2/003tl Anonim-20200831_120629-20211122_140327',
