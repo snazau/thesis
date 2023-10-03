@@ -119,12 +119,20 @@ def process_subject_predictions(
     #
     # plot_hist(fn_min_dists_to_seizure, 'fn_min_dists_to_seizure')
 
+    tp_mask = ((labels == 1) & (probs_filtered > threshold))
+    tp_num = tp_mask.sum()
+
+    tn_mask = ((labels == 0) & (probs_filtered <= threshold))
+    tn_num = tn_mask.sum()
+
     metric_dict = {
         'f1_score': f1_score,
         'precision_score': precision_score,
         'recall_score': recall_score,
         'fp_num': fp_num,
+        'tp_num': tp_num,
         'fn_num': fn_num,
+        'tn_num': tn_num,
         'duration': (time_idxs_end[-1] / sfreq - time_idxs_start[0] / sfreq) / 3600,
     }
 
