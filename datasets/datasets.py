@@ -773,11 +773,11 @@ def tta_collate_function(batch, tta_augs=tuple(), data_type='power_spectrum', no
 if __name__ == '__main__':
     import json
 
-    dataset_info_path = './data/dataset_info.json'
+    dataset_info_path = '../data/dataset_info.json'
     with open(dataset_info_path) as f:
         dataset_info = json.load(f)
 
-    data_dir = './data'
+    data_dir = '../data'
     # subject_key = 'data1/dataset28'
     # subject_key = 'data1/dataset2'
     subject_key = 'data2/038tl Anonim-20190821_113559-20211123_004935'
