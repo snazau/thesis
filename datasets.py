@@ -585,6 +585,60 @@ class SubjectInferenceDataset(torch.utils.data.Dataset):
         return sample
 
 
+class SubjectPreprocessedDataset(torch.utils.data.Dataset):
+    def __init__(self, preprocessed_dir, seizures=None, sfreq=128, sample_duration=10, log=False, normalization=None, transform=None):
+        self.sample_duration = sample_duration
+        self.sfreq = sfreq
+        self.preprocessed_dir = preprocessed_dir
+
+        self.filenames = [
+            filename
+            for filename in sorted(os.listdir(self.preprocessed_dir))
+            if filename.endswith('.npy')
+        ]
+        self.file_paths = [os.path.join(self.preprocessed_dir, filename) for filename in self.filenames]
+
+        self.seizures = seizures
+
+        self.log = log
+        self.normalization = normalization
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def __getitem__(self, idx):
+        sample_data = np.load(self.file_paths[idx])
+
+        filename = self.filenames[idx]
+        filename = os.path.splitext(filename)[0]
+        start_time = int(filename.split('start_time=')[1])
+        time_idx_start = int((filename.split('time_idx_start=')[1]).split('_')[0])
+
+        target = 1 if check_if_in_segments(start_time, self.seizures) or check_if_in_segments(start_time + self.sample_duration, self.seizures) else 0
+
+        if self.log:
+            sample_data = np.log(sample_data)
+
+        if self.normalization == 'minmax':
+            sample_data = (sample_data - sample_data.min()) / (sample_data.max() - sample_data.min())
+        elif self.normalization == 'meanstd':
+            sample_data = (sample_data - sample_data.mean()) / sample_data.std()
+
+        sample = {
+            'data': torch.from_numpy(sample_data).float(),
+            'target': target,
+            'start_time': start_time,
+            'time_idx_start': time_idx_start,
+            'time_idx_end': time_idx_start + self.sfreq * self.sample_duration,
+        }
+
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        return sample
+
+
 def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False, log=True, transform=None):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform

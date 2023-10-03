@@ -163,7 +163,8 @@ def run_training(config):
         if len(config['data']['train']['subject_keys']) > 0:
             print('Renewing training raw data')
             for dataset_idx in range(len(datasets_train)):
-                datasets_train[dataset_idx].renew_data()
+                if hasattr(datasets_train, 'renew_data'):
+                    datasets_train[dataset_idx].renew_data()
             loader_train = utils.neural.training.get_loader(
                 datasets_train,
                 loader_kwargs=config['data']['train']['loader_params'],
