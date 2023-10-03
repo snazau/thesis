@@ -106,7 +106,10 @@ def find_best_tp(seizures, time_idxs_start, labels, probs, threshold, sfreq):
 
 
 def visualize_samples(samples, probs, channel_names, sfreq, baseline_mean, set_name, subject_key, visualization_dir):
+    # samples.shape = (1, C, T)
     freqs = np.arange(1, 40.01, 0.1)
+
+    # power_spectrum.shape = (1, C, F, T)
     power_spectrum = mne.time_frequency.tfr_array_morlet(
         samples,
         sfreq=sfreq,
