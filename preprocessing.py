@@ -142,10 +142,15 @@ if __name__ == '__main__':
         print(f"channels_to_drop = {channels_to_drop}")
         raw.drop_channels(channels_to_drop)
 
-        ica_path = os.path.join(data_dir, 'ica', *subject_key.split('/'))
+        ica_path = os.path.join(data_dir, 'ica_20230628', *subject_key.split('/'))
         ica_path += '.fif'
         print(f'Fitting {ica_path}')
-        raw_filtered = preprocess_raw(raw, save_ica_path=ica_path, picks=picks)
-        # raw_filtered.plot(duration=10)
-        # plt.show()
+        try:
+            raw_filtered = preprocess_raw(raw, save_ica_path=ica_path, picks=picks)
+            # raw_filtered = preprocess_raw(raw, save_ica_path=None, picks=picks)
+            # raw_filtered.plot(duration=600)
+            # plt.show()
+        except Exception as e:
+            import traceback
+            print(f'Unable to process {subject_key}\nerror = {str(e)}\n{traceback.print_exc()}')
         print()
