@@ -98,6 +98,22 @@ def run_training(config):
     # Init worker
     writer = SummaryWriter(os.path.join(run_dir, 'tb_logs'))
 
+    # Process subject keys to exclude
+    if 'subject_keys_exclude' not in config['data']:
+        config['data']['subject_keys_exclude'] = list()
+
+    config['data']['train']['subject_keys'] = [
+        subject_key
+        for subject_key in config['data']['train']['subject_keys']
+        if subject_key not in config['data']['subject_keys_exclude']
+    ]
+
+    config['data']['val']['subject_keys'] = [
+        subject_key
+        for subject_key in config['data']['val']['subject_keys']
+        if subject_key not in config['data']['subject_keys_exclude']
+    ]
+
     # Data val
     datasets_train = utils.neural.training.get_datasets(
         config['data']['data_dir'],

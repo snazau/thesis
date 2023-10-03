@@ -111,6 +111,26 @@ if __name__ == '__main__':
         dataset_info = json.load(f)
 
     data_dir = './data'
+
+    subject_keys_exclude = [
+        'data1/dataset11',
+        'data1/dataset13',
+        'data1/dataset22',
+        'data1/dataset27',
+        'data2/004tl Anonim-20200926_213911-20211122_144051',
+        'data2/004tl Anonim-20200929_081036-20211122_144552',
+        'data2/006tl Anonim-20210208_063816-20211122_154113',
+        'data2/009tl Anonim-20200213_130213-20211122_160907',
+        'data2/009tl Anonim-20200215_021624-20211122_161231',
+        'data2/015tl Anonim-20201116_134129-20211122_161958',
+        'data2/017tl Anonim-20200708_143949-20211122_163253',
+        'data2/018tl Anonim-20201212_101651-20211122_163821',
+        'data2/020tl Anonim-20201218_194126-20211122_171755',
+        'data2/026tl Anonim-20210302_093747-20211122_175031',
+        'data2/037tl Anonim-20201102_102725-20211123_003801',
+        'data2/039tl Anonim-20200607_035937-20211123_005921',
+    ]
+
     # subject_key = 'data1/dataset28'
     # subject_key = 'data1/dataset2'
     # subject_keys = ['data2/038tl Anonim-20190821_113559-20211123_004935', 'data1/dataset27']
@@ -207,6 +227,8 @@ if __name__ == '__main__':
         # 'data2/038tl Anonim-20190822_203419-20211123_005705', 'data1/dataset25', 'data1/dataset5',
         # 'data2/018tl Anonim-20201215_022951-20211122_165644',
     ]
+    subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
+
     for subject_idx, subject_key in enumerate(subject_keys):
         print(subject_key)
         subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
