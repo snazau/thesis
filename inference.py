@@ -14,30 +14,37 @@ import utils.neural.training
 from utils.neural import training
 
 
-def predict(model, subject_eeg_path, subject_seizures, config):
+def predict(model, subject_key, subject_eeg_path, subject_seizures, config):
     model.eval()
+
+    if 'stats_dir' in config and config['stats_dir'] is not None:
+        stats_path = os.path.join(config['stats_dir'], subject_key + '.npy')
+    else:
+        stats_path = None
 
     subject_dataset = datasets.SubjectSequentialDataset(
         subject_eeg_path,
         subject_seizures,
+        stats_path=stats_path,
         sample_duration=config['sample_duration'],
         shift=config['shift'],
         data_type='raw',
         baseline_correction=False,
     )
-    # collate_fn = partial(
-    #     datasets.custom_collate_function,
-    #     normalization=config['normalization'],
-    #     transform=None,
-    #     data_type=config['data_type'],
-    # )
     collate_fn = partial(
-        datasets.tta_collate_function,
-        tta_augs=config['tta_augs'],
+        datasets.custom_collate_function,
         normalization=config['normalization'],
+        transform=None,
+        baseline_correction=False,
         data_type=config['data_type'],
-        baseline_correction=config['baseline_correction'],
     )
+    # collate_fn = partial(
+    #     datasets.tta_collate_function,
+    #     tta_augs=config['tta_augs'],
+    #     normalization=config['normalization'],
+    #     data_type=config['data_type'],
+    #     baseline_correction=config['baseline_correction'],
+    # )
     loader = torch.utils.data.DataLoader(subject_dataset, batch_size=config['batch_size'], collate_fn=collate_fn, shuffle=False)
 
     device = config['device']
@@ -274,10 +281,11 @@ if __name__ == '__main__':
         state_dict = torch.load(checkpoint_path)['model']['state_dict']
         # model = utils.neural.training.get_model('resnet18', model_kwargs=dict())
         model = utils.neural.training.get_model('efficientnet_b0', model_kwargs=dict(pretrained=True))
+        # model = utils.neural.training.get_model('efficientnet_b0_1channel', model_kwargs=dict(pretrained=True))
         model.load_state_dict(state_dict)
         model = model.to(prediction_config['device'])
 
-        predction_data = predict(model, subject_eeg_path, subject_seizures, prediction_config)
+        predction_data = predict(model, subject_key, subject_eeg_path, subject_seizures, prediction_config)
         predictions_dir = os.path.join(experiment_dir, 'predictions', subject_key.split('/')[0])
         os.makedirs(predictions_dir, exist_ok=True)
         subject_name = subject_key.split('/')[-1]

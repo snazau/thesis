@@ -54,7 +54,7 @@ def get_scheduler(scheduler_name, scheduler_kwargs, optimizer):
     return scheduler
 
 
-def get_datasets(data_dir, dataset_info_path, subject_keys, prediction_data_dir, dataset_class_name, dataset_kwargs):
+def get_datasets(data_dir, dataset_info_path, subject_keys, prediction_data_dir, stats_dir, dataset_class_name, dataset_kwargs):
     with open(dataset_info_path) as f:
         dataset_info = json.load(f)
 
@@ -64,9 +64,11 @@ def get_datasets(data_dir, dataset_info_path, subject_keys, prediction_data_dir,
         subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
         prediction_data_path = None if prediction_data_dir is None else os.path.join(prediction_data_dir, subject_key + '.pickle')
+        stats_path = None if stats_dir is None else os.path.join(stats_dir, subject_key + '.npy')
         # if not os.path.exists(prediction_data_path):
         #     prediction_data_path = None
         dataset_kwargs['prediction_data_path'] = prediction_data_path
+        dataset_kwargs['stats_path'] = stats_path
         subject_dataset = getattr(datasets, dataset_class_name)(subject_eeg_path, subject_seizures, **dataset_kwargs)
 
         datasets_list.append(subject_dataset)

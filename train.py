@@ -104,6 +104,7 @@ def run_training(config):
         config['data']['dataset_info_path'],
         config['data']['train']['subject_keys'],
         config['data']['train']['prediction_data_dir'],
+        config['data']['train']['stats_dir'],
         dataset_class_name=config['data']['train']['dataset_class_name'],
         dataset_kwargs=config['data']['train']['dataset_params'],
     )
@@ -113,6 +114,7 @@ def run_training(config):
         config['data']['dataset_info_path'],
         config['data']['val']['subject_keys'],
         config['data']['val']['prediction_data_dir'],
+        config['data']['train']['stats_dir'],
         dataset_class_name=config['data']['val']['dataset_class_name'],
         dataset_kwargs=config['data']['val']['dataset_params'],
     )

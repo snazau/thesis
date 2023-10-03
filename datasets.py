@@ -1,3 +1,4 @@
+import os
 import pickle
 
 import mne
@@ -146,6 +147,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             seizures,
             samples_num,
             prediction_data_path=None,
+            stats_path=None,
             sample_duration=60,
             normal_samples_fraction=0.5,
             normalization=None,
@@ -158,6 +160,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.seizures = seizures
         self.samples_num = samples_num
         self.prediction_data = None if prediction_data_path is None else pickle.load(open(prediction_data_path, 'rb'))
+        self.stats_data = None if stats_path is None else pickle.load(open(stats_path, 'rb'))
         self.sample_duration = sample_duration
         self.data_type = data_type
         self.normal_samples_fraction = normal_samples_fraction
@@ -295,6 +298,10 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             'baseline_std': self.baseline_std,
         }
 
+        if self.stats_data is not None:
+            sample['cwt_mean'] = np.expand_dims(np.expand_dims(self.stats_data['mean'], axis=0), axis=3)
+            sample['cwt_std'] = np.expand_dims(np.expand_dims(self.stats_data['std'], axis=0), axis=3)
+
         if self.transform is not None:
             sample = self.transform(sample)
 
@@ -376,6 +383,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             self,
             eeg_file_path,
             seizures,
+            stats_path=None,
             sample_duration=60,
             shift=None,
             normalization=None,
@@ -386,6 +394,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         self.eeg_file_path = eeg_file_path
         self.raw = eeg_reader.EEGReader.read_eeg(self.eeg_file_path)
         self.seizures = seizures
+        self.stats_data = None if stats_path is None else pickle.load(open(stats_path, 'rb'))
         self.sample_duration = sample_duration
         self.shift = shift if shift is not None else self.sample_duration
         self.data_type = data_type
@@ -486,6 +495,10 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             'baseline_mean': self.baseline_mean,
             'baseline_std': self.baseline_std,
         }
+
+        if self.stats_data is not None:
+            sample['cwt_mean'] = np.expand_dims(np.expand_dims(self.stats_data['mean'], axis=0), axis=3)
+            sample['cwt_std'] = np.expand_dims(np.expand_dims(self.stats_data['std'], axis=0), axis=3)
 
         if self.transform is not None:
             sample = self.transform(sample)
@@ -595,6 +608,10 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
             power_spectrum = (power_spectrum - power_spectrum.min()) / (power_spectrum.max() - power_spectrum.min())
         elif normalization == 'meanstd':
             power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
+        elif normalization == 'cwt_meanstd':
+            cwt_mean = np.concatenate([sample_data['cwt_mean'] for sample_data in batch], axis=0)
+            cwt_std = np.concatenate([sample_data['cwt_std'] for sample_data in batch], axis=0)
+            power_spectrum = (power_spectrum - cwt_mean) / cwt_std
 
         for sample_idx in range(power_spectrum.shape[0]):
             batch[sample_idx]['data'] = torch.from_numpy(power_spectrum[sample_idx]).float()
