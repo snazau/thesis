@@ -1,5 +1,7 @@
 # Custom
-**/data*/*
+**/data/*
+**/data_orig/*
+**/data_ocsvm_cwt/*
 **/temp/*
 **/logs/*
 **/experiments/*
@@ -12,6 +14,7 @@
 *.pth
 *.pth.tar
 *.pickle
+*.png
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
