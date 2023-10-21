@@ -84,7 +84,7 @@ def visualize_seizures(raw_path, seizures):
         visualization.visualize_raw(
             sample,
             channel_names,
-            seizure_idxs=seizure_local,
+            seizure_times_list=[seizure_local],
             heatmap=None,
             save_path=save_path,
             trim_channels=False,
