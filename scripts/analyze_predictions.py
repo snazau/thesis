@@ -2,139 +2,19 @@ import os
 import pickle
 
 import plotly.graph_objects as go
-import scipy.ndimage
-import sklearn.metrics
+
+from utils.common import filter_predictions, calc_metrics
 
 
-def filter_predictions(probs, filter, k_size):
-    assert filter in ['mean', 'median', None]
-
-    if filter == 'mean':
-        probs_filtered = scipy.ndimage.uniform_filter1d(probs, size=k_size)
-    elif filter == 'median':
-        probs_filtered = scipy.ndimage.median_filter(probs, size=k_size)
-    elif filter is None:
-        probs_filtered = probs.copy()
-    else:
-        raise NotImplementedError
-
-    return probs_filtered
-
-
-def plot_hist(values, values_name):
-    import matplotlib.pyplot as plt
-    plt.hist(values, density=False, bins=100)
-    plt.ylabel('counts')
-    plt.xlabel(values_name)
-    plt.title(values_name)
-    plt.show()
-
-
-def process_subject_predictions(
-    prediction_data,
-    threshold,
-    filter=None,
-    k_size=-1,
-    sfreq=128,
-    visualization_path=None,
-):
-    assert filter in ['mean', 'median', None]
-
+def visualize_prediction(prediction_data, probs_filtered, visualization_path, sfreq=128):
     # get data from prediction_data
     time_idxs_start = prediction_data['time_idxs_start']
     time_idxs_end = prediction_data['time_idxs_end']
     seizures = prediction_data['subject_seizures']
-    probs = prediction_data['probs_wo_tta']
     labels = prediction_data['labels']
 
-    probs_filtered = filter_predictions(probs, filter, k_size)
-
-    # metrics
-    preds = probs_filtered > threshold
-    f1_score = sklearn.metrics.f1_score(labels, preds)
-    precision_score = sklearn.metrics.precision_score(labels, preds)
-    recall_score = sklearn.metrics.recall_score(labels, preds)
-
     fp_mask = ((labels == 0) & (probs_filtered > threshold))
-    fp_num = fp_mask.sum()
-
-    # fp_series_sizes = list()
-    # fp_idx = 0
-    # while fp_idx < len(fp_mask):
-    #     fp = fp_mask[fp_idx]
-    #     if fp:
-    #         fp_series_size = 1
-    #         fp_idx += 1
-    #         while fp_mask[fp_idx]:
-    #             fp_idx += 1
-    #             fp_series_size += 1
-    #         fp_series_sizes.append(fp_series_size)
-    #     else:
-    #         fp_idx += 1
-    # plot_hist(fp_series_sizes, 'fp_series_sizes')
-    #
-    # fp_min_dists_to_seizure = list()
-    # for fp_idx, fp in enumerate(fp_mask):
-    #     if not fp:
-    #         continue
-    #
-    #     fp_time_start = time_idxs_start[fp_idx] / sfreq
-    #     min_dist_to_seizure = 1e9
-    #     for seizure in seizures:
-    #         min_dist_to_seizure = min(min_dist_to_seizure, abs(fp_time_start - seizure['start']))
-    #         min_dist_to_seizure = min(min_dist_to_seizure, abs(fp_time_start - seizure['end']))
-    #     fp_min_dists_to_seizure.append(min_dist_to_seizure)
-    #
-    # plot_hist(fp_min_dists_to_seizure, 'fp_min_dists_to_seizure')
-
     fn_mask = ((labels == 1) & (probs_filtered <= threshold))
-    fn_num = fn_mask.sum()
-
-    # fn_series_sizes = list()
-    # fn_idx = 0
-    # while fn_idx < len(fn_mask):
-    #     fn = fn_mask[fn_idx]
-    #     if fn:
-    #         fn_series_size = 1
-    #         fn_idx += 1
-    #         while fn_mask[fn_idx]:
-    #             fn_idx += 1
-    #             fn_series_size += 1
-    #         fn_series_sizes.append(fn_series_size)
-    #     else:
-    #         fn_idx += 1
-    # plot_hist(fn_series_sizes, 'fn_series_sizes')
-    #
-    # fn_min_dists_to_seizure = list()
-    # for fn_idx, fn in enumerate(fn_mask):
-    #     if not fn:
-    #         continue
-    #
-    #     fn_time_start = time_idxs_start[fn_idx] / sfreq
-    #     min_dist_to_seizure = 1e9
-    #     for seizure in seizures:
-    #         min_dist_to_seizure = min(min_dist_to_seizure, abs(fn_time_start - seizure['start']))
-    #         min_dist_to_seizure = min(min_dist_to_seizure, abs(fn_time_start - seizure['end']))
-    #     fn_min_dists_to_seizure.append(min_dist_to_seizure)
-    #
-    # plot_hist(fn_min_dists_to_seizure, 'fn_min_dists_to_seizure')
-
-    tp_mask = ((labels == 1) & (probs_filtered > threshold))
-    tp_num = tp_mask.sum()
-
-    tn_mask = ((labels == 0) & (probs_filtered <= threshold))
-    tn_num = tn_mask.sum()
-
-    metric_dict = {
-        'f1_score': f1_score,
-        'precision_score': precision_score,
-        'recall_score': recall_score,
-        'fp_num': fp_num,
-        'tp_num': tp_num,
-        'fn_num': fn_num,
-        'tn_num': tn_num,
-        'duration': (time_idxs_end[-1] / sfreq - time_idxs_start[0] / sfreq) / 3600,
-    }
 
     # visualization
     if visualization_path is not None:
@@ -221,8 +101,6 @@ def process_subject_predictions(
         # fig.show()
         fig.write_html(visualization_path, auto_open=False)
 
-    return metric_dict
-
 
 if __name__ == '__main__':
     import utils.avg_meters
@@ -238,10 +116,15 @@ if __name__ == '__main__':
     # experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'
     # experiment_name = 'renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug'
     # experiment_name = '20230912_efficientnet_b0_all_subjects_SpecTimeFlipEEGFlipAug_log_power_BCELossWithTimeToClosestSeizure'
-    experiment_name = '20230925_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_16excluded'
-    visualizations_dir = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\visualizations'
+    # experiment_name = '20230925_efficientnet_b0_all_subjects_MixUp_SpecTimeFlipEEGFlipAug_log_power_16excluded'
+    # experiment_name = '20231005_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded_wo_baseline_correction'
+    # experiment_name = '20231005_EEGResNetCustomRaw_MixUp_TimeSeriesAug_raw_16excluded'
+    experiment_name = '20231012_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded'
+    visualizations_dir = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\visualizations_test'
     os.makedirs(visualizations_dir, exist_ok=True)
 
+    sfreq = 128
+    # threshold = 0.35
     threshold = 0.95
     # filter_method = None
     # k_size = -1
@@ -250,6 +133,8 @@ if __name__ == '__main__':
     print(experiment_name)
     print(f'threshold = {threshold:03.2f} filter={filter_method} k={k_size}')
     subject_keys = [
+        # 'data2/038tl Anonim-20190821_113559-20211123_004935'
+
         # # 'data2/038tl Anonim-20190821_113559-20211123_004935'
         # # 'data2/008tl Anonim-20210204_131328-20211122_160417'
         #
@@ -339,15 +224,29 @@ if __name__ == '__main__':
     subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
     # subject_keys = ['data2/027tl Anonim-20200309_195746-20211122_175315']
     for subject_key in subject_keys:
+        # read predictions
         prediction_path = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\predictions\{subject_key}.pickle'
         # prediction_path = rf'D:\Study\asp\thesis\implementation\experiments\{experiment_name}\predictions_positive_only\{subject_key}.pickle'
         prediction_data = pickle.load(open(prediction_path, 'rb'))
 
-        set_visualizations_dir = os.path.join(visualizations_dir, subject_key.split('/')[0])
-        os.makedirs(set_visualizations_dir, exist_ok=True)
+        # extract attributes
+        time_idxs_start = prediction_data['time_idxs_start']
+        time_idxs_end = prediction_data['time_idxs_end']
+        labels = prediction_data['labels']
+        probs = prediction_data['probs_wo_tta'] if 'probs_wo_tta' in prediction_data else prediction_data['probs']
+        if len(probs) == 0:
+            probs = prediction_data['probs']
 
+        # smooth predictions
+        probs_filtered = filter_predictions(probs, filter_method, k_size)
+
+        # calc metrics over smoothed predictions
+        subject_metrics = calc_metrics(probs_filtered, labels, threshold)
+        subject_metrics['duration'] = (time_idxs_end[-1] / sfreq - time_idxs_start[0] / sfreq) / 3600
+
+        # save visualizations
         visualization_path = os.path.join(visualizations_dir, f'{subject_key}_filter={filter_method}_k={k_size}.html')
-        subject_metrics = process_subject_predictions(prediction_data, threshold, filter_method, k_size, visualization_path=visualization_path)
+        visualize_prediction(prediction_data, probs_filtered, visualization_path)
         metric_meter.update(subject_metrics)
 
         print(f'subject_key = {subject_key:60} subject_metrics {" ".join([f"{key} = {value:9.4f}" for key, value in subject_metrics.items()])}')
