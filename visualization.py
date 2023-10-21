@@ -153,7 +153,17 @@ def plot_spectrum_averaged(power_spectrum, freqs):
     plt.show()
 
 
-def visualize_raw(raw_signal, channel_names, seizure_idxs, heatmap=None, time_start=0, save_path=None, trim_channels=True):
+def visualize_raw(
+        raw_signal,
+        channel_names,
+        seizure_times_list=None,
+        seizure_times_colors=('red', 'green', 'blue', 'yellow', 'cyan'),
+        seizure_times_ls=('-', '--', ':'),
+        heatmap=None,
+        time_start=0,
+        save_path=None,
+        trim_channels=True,
+):
     # raw_signal.shape = (C, T)
     # heatmap.shape = (C, T)
 
@@ -200,9 +210,10 @@ def visualize_raw(raw_signal, channel_names, seizure_idxs, heatmap=None, time_st
     )
 
     for channel_idx in range(raw_signal.shape[0]):
-        time_values = np.linspace(time_start, time_start + raw_signal.shape[1] / 128, raw_signal.shape[1])
+        time_end = time_start + raw_signal.shape[1] / 128
+        time_values = np.linspace(time_start, time_end, raw_signal.shape[1])
         ax = plt.subplot(gs[channel_idx, 0])
-        ax.set_xlim([time_start, time_start + raw_signal.shape[1] / 128])
+        ax.set_xlim([time_start, time_end])
         # ax.set_xticklabels([])
 
         channel_name = channel_names[channel_idx][4:] if trim_channels else channel_names[channel_idx]
@@ -226,9 +237,14 @@ def visualize_raw(raw_signal, channel_names, seizure_idxs, heatmap=None, time_st
         else:
             ax.set_xlabel('Time (s)')
 
-        if seizure_idxs is not None:
-            ax.axvline(x=seizure_idxs['start'], color='r', label='Seizure start')
-            ax.axvline(x=seizure_idxs['end'], color='r', label='Seizure end')
+        if seizure_times_list is not None:
+            for seizure_idx, seizure_time in enumerate(seizure_times_list):
+                seizure_line_color = seizure_times_colors[seizure_idx % len(seizure_times_list)]
+                seizure_line_style = seizure_times_ls[seizure_idx % len(seizure_times_list)]
+                if time_start <= seizure_time['start'] <= time_end:
+                    ax.axvline(x=seizure_time['start'], color=seizure_line_color, ls=seizure_line_style, label=f'Seizure {seizure_idx:02} start')
+                if time_start <= seizure_time['end'] <= time_end:
+                    ax.axvline(x=seizure_time['end'], color=seizure_line_color, ls=seizure_line_style, label=f'Seizure {seizure_idx:02} end')
 
         if heatmap is not None:
             for time_idx in np.arange(len(time_values) - 1):

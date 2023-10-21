@@ -54,7 +54,7 @@ if __name__ == '__main__':
                 visualization.visualize_raw(
                     seizure_sample[0],
                     channel_names,
-                    seizure_idxs=seizure_local,
+                    seizure_times_list=[seizure_local],
                     heatmap=None,
                     save_path=save_path,
                 )
