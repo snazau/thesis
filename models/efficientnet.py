@@ -18,10 +18,23 @@ class EEGEfficientNetB0Spectrum(torch.nn.Module):
             self.model.conv_stem.weight = torch.nn.parameter.Parameter(conv_stem_weight, requires_grad=True)
 
         self.model.classifier = torch.nn.Sequential(
-            torch.nn.Linear(1280, 64),
+            torch.nn.Linear(self.get_embedding_dim(), 64),
             torch.nn.ReLU(),
             torch.nn.Linear(64, 1),
         )
+
+    def forward_features(self, x):
+        # x.shape = (B, 25, H, W)
+        return self.model.forward_features(x)  # (B, 1280, H // 32, W // 32)
+
+    def forward_embeddings(self, x):
+        # x.shape = (B, 25, H, W)
+        features = self.forward_features(x)  # (B, 1280, H // 32, W // 32)
+        embeddings = self.model.global_pool(features)  # (B, 1280)
+        return embeddings
+
+    def get_embedding_dim(self):
+        return self.model.conv_head.out_channels
 
     def forward(self, x):
         return self.model(x)
@@ -35,16 +48,29 @@ class EEGEfficientNetB0Raw(torch.nn.Module):
         self.model = timm.create_model('efficientnet_b0.ra_in1k', pretrained=self.pretrained)
 
         conv_stem_pretrained_weight = self.model.conv_stem.weight
-        self.model.conv_stem = torch.nn.Conv2d(1, 64, kernel_size=3, stride=2, padding=1, bias=False)
+        self.model.conv_stem = torch.nn.Conv2d(1, 32, kernel_size=3, stride=2, padding=1, bias=False)
         if self.pretrained:
             conv_stem_weight = torch.mean(conv_stem_pretrained_weight, dim=1, keepdim=True)
             self.model.conv_stem.weight = torch.nn.parameter.Parameter(conv_stem_weight, requires_grad=True)
 
         self.model.classifier = torch.nn.Sequential(
-            torch.nn.Linear(1280, 64),
+            torch.nn.Linear(self.get_embedding_dim(), 64),
             torch.nn.ReLU(),
             torch.nn.Linear(64, 1),
         )
+
+    def forward_features(self, x):
+        # x.shape = (B, 1, H, W)
+        return self.model.forward_features(x)  # (B, 1280, H // 32, W // 32)
+
+    def forward_embeddings(self, x):
+        # x.shape = (B, 1, H, W)
+        features = self.forward_features(x)  # (B, 1280, H // 32, W // 32)
+        embeddings = self.model.global_pool(features)  # (B, 1280)
+        return embeddings
+
+    def get_embedding_dim(self):
+        return self.model.conv_head.out_channels
 
     def forward(self, x):
         return self.model(x)
