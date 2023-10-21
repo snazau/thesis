@@ -29,12 +29,13 @@ def predict(model, subject_key, subject_eeg_path, subject_seizures, config):
         shift=config['shift'],
         data_type='raw',
         baseline_correction=False,
+        force_calc_baseline_stats=config['force_calc_baseline_stats'],
     )
     collate_fn = partial(
         datasets.datasets_static.custom_collate_function,
         normalization=config['normalization'],
         transform=None,
-        baseline_correction=False,
+        baseline_correction=config['baseline_correction'],
         data_type=config['data_type'],
     )
     # collate_fn = partial(
