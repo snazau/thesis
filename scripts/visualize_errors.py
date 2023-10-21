@@ -10,16 +10,7 @@ import eeg_reader
 import datasets.datasets_static
 import utils.neural.training
 import visualization
-
-
-def get_min_deviation_from_seizure(seizures, time_in_seconds):
-    min_deviation = 1e9
-    for seizure in seizures:
-        if seizure['start'] <= time_in_seconds <= seizure['end']:
-            return -1
-
-        min_deviation = min(min_deviation, abs(time_in_seconds - seizure['start']), abs(time_in_seconds - seizure['end']))
-    return min_deviation
+from utils.common import get_min_deviation_from_seizure
 
 
 def find_best_fp(seizures, time_idxs_start, labels, probs, threshold, sfreq, min_start_time=900, min_deviation=30):
