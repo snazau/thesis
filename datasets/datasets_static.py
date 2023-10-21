@@ -163,6 +163,28 @@ def get_baseline_stats(raw_data, baseline_length_in_seconds=500, sfreq=128, freq
     return baseline_mean, baseline_std
 
 
+def get_baseline_stats_raw(raw_data, baseline_length_in_seconds=500, sfreq=128, freqs=np.arange(1, 40.01, 0.1)):
+    min_time, max_time = raw_data.times.min(), raw_data.times.max()
+
+    # sample_start_times = np.arange(min_time, max_time - baseline_length_in_seconds, baseline_length_in_seconds // 2)
+    sample_start_times = np.arange(min_time, max_time - baseline_length_in_seconds, max(baseline_length_in_seconds, max_time // baseline_length_in_seconds))
+    samples, _, _ = generate_raw_samples(
+        raw_data,
+        sample_start_times,
+        baseline_length_in_seconds
+    )
+
+    samples_std = np.std(samples, axis=2)  # std over time
+    samples_avg_std = np.mean(samples_std, axis=1)  # mean over channels
+    baseline_idx = np.argmin(samples_avg_std)
+    baseline_segment = samples[baseline_idx:baseline_idx + 1]
+
+    baseline_mean = np.mean(baseline_segment, axis=(0, 2), keepdims=True)
+    baseline_std = np.std(baseline_segment, axis=(0, 2), keepdims=True)
+
+    return baseline_mean, baseline_std
+
+
 class SubjectRandomDataset(torch.utils.data.Dataset):
     def __init__(
             self,
@@ -176,6 +198,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             normalization=None,
             data_type='power_spectrum',
             baseline_correction=False,
+            force_calc_baseline_stats=False,
             transform=None,
     ):
         self.eeg_file_path = eeg_file_path
@@ -189,6 +212,7 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         self.normal_samples_fraction = normal_samples_fraction
         self.normalization = normalization
         self.baseline_correction = baseline_correction
+        self.force_calc_baseline_stats = force_calc_baseline_stats
         self.transform = transform
 
         # trim last seizure
@@ -224,13 +248,21 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
 
         # calc stuff for baseline correction
         self.freqs = np.arange(1, 40.01, 0.1)
-        if self.baseline_correction:
-            self.baseline_mean, self.baseline_std = get_baseline_stats(
-                self.raw,
-                baseline_length_in_seconds=500,
-                sfreq=self.raw.info['sfreq'],
-                freqs=self.freqs,
-            )
+        if self.baseline_correction or self.force_calc_baseline_stats:
+            if self.data_type == 'raw':
+                self.baseline_mean, self.baseline_std = get_baseline_stats_raw(
+                    self.raw,
+                    baseline_length_in_seconds=500,
+                    sfreq=self.raw.info['sfreq'],
+                    freqs=self.freqs,
+                )
+            else:
+                self.baseline_mean, self.baseline_std = get_baseline_stats(
+                    self.raw,
+                    baseline_length_in_seconds=500,
+                    sfreq=self.raw.info['sfreq'],
+                    freqs=self.freqs,
+                )
             self.baseline_mean = self.baseline_mean[np.newaxis]
             self.baseline_std = self.baseline_std[np.newaxis]
         else:
@@ -428,6 +460,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
             normalization=None,
             data_type='power_spectrum',
             baseline_correction=False,
+            force_calc_baseline_stats=False,
             transform=None,
     ):
         self.eeg_file_path = eeg_file_path
@@ -439,6 +472,7 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
         self.data_type = data_type
         self.normalization = normalization
         self.baseline_correction = baseline_correction
+        self.force_calc_baseline_stats = force_calc_baseline_stats
         self.transform = transform
 
         # trim last seizure
@@ -465,14 +499,27 @@ class SubjectSequentialDataset(torch.utils.data.Dataset):
 
         # calc stuff for baseline correction
         self.freqs = np.arange(1, 40.01, 0.1)
-        self.baseline_mean, self.baseline_std = get_baseline_stats(
-            self.raw,
-            baseline_length_in_seconds=500,
-            sfreq=self.raw.info['sfreq'],
-            freqs=self.freqs,
-        )
-        self.baseline_mean = self.baseline_mean[np.newaxis]
-        self.baseline_std = self.baseline_std[np.newaxis]
+
+        if self.baseline_correction or self.force_calc_baseline_stats:
+            if self.data_type == 'raw':
+                self.baseline_mean, self.baseline_std = get_baseline_stats_raw(
+                    self.raw,
+                    baseline_length_in_seconds=500,
+                    sfreq=self.raw.info['sfreq'],
+                    freqs=self.freqs,
+                )
+            else:
+                self.baseline_mean, self.baseline_std = get_baseline_stats(
+                    self.raw,
+                    baseline_length_in_seconds=500,
+                    sfreq=self.raw.info['sfreq'],
+                    freqs=self.freqs,
+                )
+            self.baseline_mean = self.baseline_mean[np.newaxis]
+            self.baseline_std = self.baseline_std[np.newaxis]
+        else:
+            self.baseline_mean = [0]
+            self.baseline_std = [1]
 
         # get time limits of eeg file in seconds
         time_start, time_end = self.raw.times.min(), self.raw.times.max()
@@ -717,6 +764,11 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
         if transform is not None:
             raw_data = transform({'data': raw_data})['data']
 
+        if baseline_correction:
+            baseline_mean = np.concatenate([sample_data['baseline_mean'] for sample_data in batch], axis=0)
+            baseline_mean = baseline_mean[:, 0]
+            raw_data = (raw_data - baseline_mean) / baseline_mean
+
         if normalization == 'minmax':
             raw_data = (raw_data - raw_data.min()) / (raw_data.max() - raw_data.min())
         elif normalization == 'meanstd':
@@ -865,6 +917,8 @@ if __name__ == '__main__':
         data_type='raw',
         baseline_correction=True,
     )
+    sample = subject_dataset[0]
+    exit()
     # subject_dataset = SubjectSequentialDataset(subject_eeg_path, subject_seizures, sample_duration=10, data_type='raw')
     from functools import partial
     # collate_fn = partial(custom_collate_function, data_type='power_spectrum', normalization=None, baseline_correction=True)
