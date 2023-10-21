@@ -32,6 +32,9 @@ def train(strategy_name, strategy_params, loader, model, criterion, optimizer, e
             loss_avg_meter.update(loss.item())
 
             probs = torch.sigmoid(outputs)
+            if len(probs.shape) > 2:  # select last sequence prediction for recurrent scheme
+                probs = probs[:, -1]
+
             all_labels = np.concatenate([all_labels, batch["target"].cpu().detach().numpy()])
             all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
 
@@ -54,7 +57,7 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
 
     all_labels = np.array([])
     all_probs = np.array([])
-    all_start_times = np.array([])
+    # all_start_times = np.array([])
 
     loss_avg_meter = utils.avg_meters.AverageMeter()
     with tqdm.tqdm(loader) as tqdm_wrapper:
@@ -66,12 +69,14 @@ def validate(loader, model, criterion, optimizer, epoch, writer, device):
             with torch.no_grad():
                 outputs, loss = utils.neural.training.forward('default', {}, model, batch, criterion)
                 probs = torch.sigmoid(outputs)
+                if len(probs.shape) > 2:  # select last sequence prediction for recurrent scheme
+                    probs = probs[:, -1]
 
             loss_avg_meter.update(loss.item())
 
             all_labels = np.concatenate([all_labels, batch["target"].cpu().detach().numpy()])
             all_probs = np.concatenate([all_probs, probs[:, 0].cpu().detach().numpy()])
-            all_start_times = np.concatenate([all_start_times, batch["start_time"].cpu().detach().numpy()])
+            # all_start_times = np.concatenate([all_start_times, batch["start_time"].cpu().detach().numpy()])
 
             tqdm_wrapper.set_postfix(loss=loss_avg_meter.avg)
 

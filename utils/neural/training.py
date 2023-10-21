@@ -9,8 +9,11 @@ import torch.utils.data
 
 import criterions
 import datasets.datasets_static
+import datasets.datasets_recurrent
 import metrics.calib
+import models.recurrent
 import models.resnet
+import models.resnet_custom
 import models.efficientnet
 import utils.neural.mixing
 
@@ -20,6 +23,10 @@ def get_criterion(criterion_name, criterion_kwargs):
         criterion = criterions.BCELoss(**criterion_kwargs)
     elif criterion_name == 'BCELossWithTimeToClosestSeizure':
         criterion = criterions.BCELossWithTimeToClosestSeizure(**criterion_kwargs)
+    elif criterion_name == 'BCERecurrentLoss':
+        criterion = criterions.BCERecurrentLoss(**criterion_kwargs)
+    elif criterion_name == 'BCERecurrentLoss_v2':
+        criterion = criterions.BCERecurrentLoss_v2(**criterion_kwargs)
     elif criterion_name == 'FocalBCE':
         raise NotImplementedError
     else:
@@ -37,6 +44,10 @@ def get_model(model_name, model_kwargs):
         model = models.efficientnet.EEGEfficientNetB0Spectrum(**model_kwargs)
     elif model_name == 'efficientnet_b0_1channel':
         model = models.efficientnet.EEGEfficientNetB0Raw(**model_kwargs)
+    elif model_name == 'EEGResNetCustomRaw':
+        model = models.resnet_custom.EEGResNetCustomRaw(**model_kwargs)
+    elif model_name == 'CRNN':
+        model = models.recurrent.CRNN(**model_kwargs)
     else:
         raise NotImplementedError
 
@@ -79,9 +90,22 @@ def get_datasets(data_dir, dataset_info_path, subject_keys, prediction_data_dir,
                 **dataset_kwargs,
             )
         else:
-            dataset_kwargs['prediction_data_path'] = prediction_data_path
-            dataset_kwargs['stats_path'] = stats_path
-            subject_dataset = getattr(datasets, dataset_class_name)(subject_eeg_path, subject_seizures, **dataset_kwargs)
+            if hasattr(datasets.datasets_static, dataset_class_name):
+                dataset_kwargs['prediction_data_path'] = prediction_data_path
+                dataset_kwargs['stats_path'] = stats_path
+                subject_dataset = getattr(datasets.datasets_static, dataset_class_name)(
+                    subject_eeg_path,
+                    subject_seizures,
+                    **dataset_kwargs,
+                )
+            elif hasattr(datasets.datasets_recurrent, dataset_class_name):
+                subject_dataset = getattr(datasets.datasets_recurrent, dataset_class_name)(
+                    subject_eeg_path,
+                    subject_seizures,
+                    **dataset_kwargs,
+                )
+            else:
+                raise NotImplementedError
 
         datasets_list.append(subject_dataset)
     return datasets_list
@@ -97,6 +121,8 @@ def forward(strategy_name, strategy_kwargs, model, batch, criterion):
     if strategy_name.lower() == 'mixup':
         mixed_inputs, labels, labels_shuffled, lam = utils.neural.mixing.mixup(batch['data'], batch['target'], **strategy_kwargs)
         batch['outputs'] = model(mixed_inputs)
+        if isinstance(batch['outputs'], tuple):
+            batch['outputs'] = batch['outputs'][0]
 
         loss = lam * criterion(batch)
 
@@ -110,6 +136,8 @@ def forward(strategy_name, strategy_kwargs, model, batch, criterion):
         raise NotImplementedError
     elif strategy_name.lower() == 'default':
         batch['outputs'] = model(batch['data'])
+        if isinstance(batch['outputs'], tuple):
+            batch['outputs'] = batch['outputs'][0]
         loss = criterion(batch)
     else:
         raise NotImplementedError

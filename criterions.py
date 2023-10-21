@@ -34,3 +34,21 @@ class BCELossWithTimeToClosestSeizure(torch.nn.Module):
 
         loss = torch.nn.functional.binary_cross_entropy_with_logits(outputs, target, weight=batch_weights)
         return loss
+
+
+class BCERecurrentLoss(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.criterion = torch.nn.BCEWithLogitsLoss()
+
+    def forward(self, batch):
+        return self.criterion(batch['outputs'][:, -1:, 0], batch['target'].float().unsqueeze(1))
+
+
+class BCERecurrentLoss_v2(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.criterion = torch.nn.BCEWithLogitsLoss()
+
+    def forward(self, batch):
+        return self.criterion(batch['outputs'][:, :, 0], batch['target_sequence'].float().to(batch['outputs'].device))
