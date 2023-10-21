@@ -8,7 +8,7 @@ from torch.utils.data._utils import collate
 
 import custom_distribution
 import eeg_reader
-import scripts.visualize_errors
+import utils.common
 
 mne.set_log_level('error')
 
@@ -105,7 +105,7 @@ def extract_fp_times(prediction_data, threshold, sfreq):
 def filter_fp_times(fp_start_times, seizures, min_deviation=30, min_start_time=900):
     acceptable_fp_start_times = list()
     for fp_start_time in fp_start_times:
-        min_fp_deviation = scripts.visualize_errors.get_min_deviation_from_seizure(seizures, fp_start_time)
+        min_fp_deviation = utils.common.get_min_deviation_from_seizure(seizures, fp_start_time)
         if min_fp_deviation > min_deviation and fp_start_time > min_start_time:
             acceptable_fp_start_times.append(fp_start_time)
     acceptable_fp_start_times = np.array(acceptable_fp_start_times)
@@ -126,7 +126,7 @@ def extract_fn_times(prediction_data, threshold, sfreq):
 def filter_fn_times(fn_start_times, seizures, min_deviation=-1, min_start_time=900):
     acceptable_fn_start_times = list()
     for fn_start_time in fn_start_times:
-        min_fn_deviation = scripts.visualize_errors.get_min_deviation_from_seizure(seizures, fn_start_time)
+        min_fn_deviation = utils.common.get_min_deviation_from_seizure(seizures, fn_start_time)
         if min_fn_deviation <= min_deviation and fn_start_time > min_start_time:
             acceptable_fn_start_times.append(fn_start_time)
     acceptable_fn_start_times = np.array(acceptable_fn_start_times)
