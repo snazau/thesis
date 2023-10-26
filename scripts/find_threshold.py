@@ -40,6 +40,20 @@ def get_best_threshold(experiment_dir, subject_keys, filter_method='median', k_s
 
             metric_meter.update(subject_metrics)
 
+            if verbose > 1:
+                print(
+                    f'{subject_key:60}'
+                    f'threshold = {threshold:3.2f} '
+                    f'p = {subject_metrics["precision_score"]:10.4f} ({metric_meter.meters["precision_score"].avg:10.4f}) '
+                    # f'r = {subject_metrics["recall_score"]:10.4f} ({metric_meter.meters["recall_score"].avg:10.4f}) '
+                    # f'f1 = {subject_metrics["f1_score"]:10.4f} ({metric_meter.meters["f1_score"].avg:10.4f}) '
+                    f'tp = {subject_metrics["tp_num"]:6} ({metric_meter.meters["tp_num"].avg:6.2f}) '
+                    f'tn = {subject_metrics["tn_num"]:6} ({metric_meter.meters["tn_num"].avg:6.2f}) '
+                    f'fp = {subject_metrics["fp_num"]:6} ({metric_meter.meters["fp_num"].avg:6.2f}) '
+                    # f'fn = {subject_metrics["fn_num"]:6} ({metric_meter.meters["fn_num"].avg:6.2f}) '
+                    f'duration = {subject_metrics["duration"]:6.2f}'
+                )
+
         if metric_meter.meters['f1_score'].avg > best_avg_f1:
             best_avg_f1 = metric_meter.meters['f1_score'].avg
             best_threshold = threshold
