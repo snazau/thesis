@@ -30,9 +30,13 @@ def filter_predictions(probs, filter, k_size):
 def calc_metrics(probs, labels, threshold):
     # metrics
     preds = probs > threshold
-    f1_score = sklearn.metrics.f1_score(labels, preds)
-    precision_score = sklearn.metrics.precision_score(labels, preds)
-    recall_score = sklearn.metrics.recall_score(labels, preds)
+
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        f1_score = sklearn.metrics.f1_score(labels, preds)
+        precision_score = sklearn.metrics.precision_score(labels, preds)
+        recall_score = sklearn.metrics.recall_score(labels, preds)
 
     fp_mask = ((labels == 0) & (probs > threshold))
     fp_num = fp_mask.sum()
