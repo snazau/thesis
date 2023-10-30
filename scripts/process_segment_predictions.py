@@ -273,13 +273,16 @@ if __name__ == '__main__':
     # experiment_name = '20231005_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded_wo_baseline_correction'
     experiment_dir = os.path.join(rf'D:\Study\asp\thesis\implementation\experiments', experiment_name)
 
+    visualize_segments = False
+    exclude_16 = True
+
     # filter_method = None
     # k_size = -1
     filter_method = 'median'
     k_size = 7
 
     print(experiment_name)
-    print(f'filter={filter_method} k={k_size}')
+    print(f'filter={filter_method} k={k_size} exclude_16={exclude_16}')
     print()
 
     # find best threshold
@@ -333,7 +336,8 @@ if __name__ == '__main__':
         'data2/037tl Anonim-20201102_102725-20211123_003801',
         'data2/039tl Anonim-20200607_035937-20211123_005921',
     ]
-    subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
+    if exclude_16:
+        subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
     from scripts.find_threshold import get_best_threshold
     best_threshold, best_metric_meter = get_best_threshold(
@@ -341,6 +345,7 @@ if __name__ == '__main__':
         subject_keys,
         filter_method,
         k_size,
+        verbose=1,
     )
     print(f'\nbest_threshold = {best_threshold} best_metric_meter:\n{best_metric_meter}')
     print()
@@ -417,7 +422,8 @@ if __name__ == '__main__':
         # 'data2/038tl Anonim-20190822_203419-20211123_005705', 'data1/dataset25', 'data1/dataset5',
         # 'data2/018tl Anonim-20201215_022951-20211122_165644',
     ]
-    subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
+    if exclude_16:
+        subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
     subject_key_to_pred_segments = get_segments_from_predictions(
         experiment_dir,
         subject_keys,
@@ -441,34 +447,35 @@ if __name__ == '__main__':
             intersection_part_threshold=0.51,
         )
         metric_meter.update(metrics_dict)
-        print(f'subject_key = {subject_key:60} subject_metrics {" ".join([f"{key} = {value:9.4f}" for key, value in metrics_dict.items()])}')
+        print(f'#{subject_idx + 1:02} subject_key = {subject_key:60} subject_metrics {" ".join([f"{key} = {value:9.4f}" for key, value in metrics_dict.items()])}')
     print('metric_meter\n', metric_meter)
 
     # visualize segments
-    data_dir = r'D:\Study\asp\thesis\implementation\data'
+    if visualize_segments:
+        data_dir = r'D:\Study\asp\thesis\implementation\data'
 
-    save_dir = os.path.join(rf'D:\Study\asp\thesis\implementation\experiments', experiment_name, 'visualizations_segment')
-    os.makedirs(save_dir, exist_ok=True)
+        save_dir = os.path.join(rf'D:\Study\asp\thesis\implementation\experiments', experiment_name, 'visualizations_segment')
+        os.makedirs(save_dir, exist_ok=True)
 
-    import json
+        import json
 
-    dataset_info_path = r'D:\Study\asp\thesis\implementation\data\dataset_info.json'
-    with open(dataset_info_path) as f:
-        dataset_info = json.load(f)
+        dataset_info_path = r'D:\Study\asp\thesis\implementation\data\dataset_info.json'
+        with open(dataset_info_path) as f:
+            dataset_info = json.load(f)
 
-    for subject_idx, subject_key in enumerate(subject_key_to_pred_segments.keys()):
-        print(f'{subject_idx}/{len(subject_key_to_pred_segments)} subject_key = {subject_key}')
+        for subject_idx, subject_key in enumerate(subject_key_to_pred_segments.keys()):
+            print(f'{subject_idx}/{len(subject_key_to_pred_segments)} subject_key = {subject_key}')
 
-        segments_dict = subject_key_to_pred_segments[subject_key]
+            segments_dict = subject_key_to_pred_segments[subject_key]
 
-        try:
-            subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
-            visualize_predicted_segments(subject_eeg_path, segments_dict['seizures'], segments_dict['seizures_pred'])
-        except Exception as e:
-            import traceback
+            try:
+                subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
+                visualize_predicted_segments(subject_eeg_path, segments_dict['seizures'], segments_dict['seizures_pred'])
+            except Exception as e:
+                import traceback
 
-            print(f'Smth went wrong with {subject_key}')
-            print(traceback.format_exc())
-            print('\n\n\n')
-        # exit(0)
-    print('Visuazlization finished\n\n\n')
+                print(f'Smth went wrong with {subject_key}')
+                print(traceback.format_exc())
+                print('\n\n\n')
+            # exit(0)
+        print('Visuazlization finished\n\n\n')
