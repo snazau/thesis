@@ -128,6 +128,18 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
     datasets.datasets_static.drop_unused_channels(subject_eeg_path, raw)
     recording_duration = raw.times.max() - raw.times.min()
 
+    # Noise reduction
+    raw_filtered = None
+    subset_name = os.path.basename(os.path.dirname(subject_eeg_path))
+    subject_name = os.path.splitext(os.path.basename(subject_eeg_path))[0]
+    ica_dir = 'D:/Study/asp/thesis/implementation/data/ica_20231023/'
+    ica_path = os.path.join(ica_dir, subset_name, f'{subject_name}.fif')
+    if os.path.exists(ica_path):
+        import mne
+        import copy
+        ica = mne.preprocessing.read_ica(ica_path)
+        raw_filtered = ica.apply(copy.deepcopy(raw))
+
     for seizure_idx, seizure_segment_pred in enumerate(seizure_segments_pred):
         closest_segment, closest_distance = find_closest_segments(seizure_segment_pred, seizure_segments_true)
 
@@ -172,6 +184,25 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
         )
         print(f'Saved to {save_path}')
 
+        if raw_filtered is not None:
+            seizure_sample_filtered, _, _ = datasets.datasets_static.generate_raw_samples(
+                raw_filtered,
+                sample_start_times=[start_time],
+                sample_duration=duration,
+            )
+            if closest_distance == 0:  # TP
+                save_path = os.path.join(save_dir, 'tp_filtered', f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx)}.png')
+            else:  # FP
+                save_path = os.path.join(save_dir, 'fp_filtered', f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx)}.png')
+
+            visualization.visualize_raw(
+                seizure_sample_filtered[0],
+                channel_names,
+                seizure_times_list=segments_to_visualize,
+                heatmap=None,
+                save_path=save_path,
+            )
+
     for seizure_idx, seizure_segment_true in enumerate(seizure_segments_true):
         overlap_with_pred = any([
             overlapping_segment(seizure_segment_true, seizure_segment_pred)
@@ -212,6 +243,25 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
             save_path=save_path,
         )
         print(f'Saved to {save_path}')
+
+        if raw_filtered is not None:
+            seizure_sample_filtered, _, _ = datasets.datasets_static.generate_raw_samples(
+                raw_filtered,
+                sample_start_times=[start_time],
+                sample_duration=duration,
+            )
+
+            save_path = os.path.join(save_dir, 'fn_filtered', f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx + len(seizure_segments_pred))}.png')
+
+            visualization.visualize_raw(
+                seizure_sample_filtered[0],
+                channel_names,
+                seizure_times_colors=('green',),
+                seizure_times_ls=('--',),
+                seizure_times_list=segments_to_visualize,
+                heatmap=None,
+                save_path=save_path,
+            )
 
     del raw
 
