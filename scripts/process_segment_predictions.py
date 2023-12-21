@@ -94,8 +94,12 @@ def get_segments(prediction_data, threshold, filter_method='median', k_size=7, s
 def get_segments_from_predictions(experiment_dir, subject_keys, threshold, filter_method='median', k_size=7, sfreq=128):
     subject_key_to_pred_segments = dict()
     for subject_key in subject_keys:
-        prediction_path = os.path.join(experiment_dir, 'predictions', rf'{subject_key}.pickle')
-        prediction_data = pickle.load(open(prediction_path, 'rb'))
+        try:
+            prediction_path = os.path.join(experiment_dir, 'predictions', rf'{subject_key}.pickle')
+            prediction_data = pickle.load(open(prediction_path, 'rb'))
+        except Exception as e:
+            prediction_path = os.path.join(experiment_dir, 'predictions_positive_only', rf'{subject_key}.pickle')
+            prediction_data = pickle.load(open(prediction_path, 'rb'))
 
         import json
         dataset_info_path = '../data/dataset_info.json'
