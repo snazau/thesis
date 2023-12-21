@@ -295,13 +295,13 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         # exit()
 
         # generate normal_segments using seizures and time limits of eeg file
-        time_start, time_end = self.raw.times.min(), self.raw.times.max()
-        time_points = [time_start]
+        self.time_start, self.time_end = self.raw.times.min(), self.raw.times.max()
+        time_points = [self.time_start]
         for seizure in self.seizures:
             assert seizure['start'] > time_points[-1]
             time_points.append(seizure['start'])
             time_points.append(seizure['end'])
-        time_points.append(time_end - self.sample_duration)
+        time_points.append(self.time_end - self.sample_duration)
         assert len(time_points) % 2 == 0
 
         self.normal_segments = list()
