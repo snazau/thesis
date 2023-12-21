@@ -103,6 +103,119 @@ def visualize_raw_with_spectrum_data(power_spectrum, raw_signal, channel_names, 
         plt.close(fig)
 
 
+def visualize_raw_with_spectrum_data_v2(
+        power_spectrum,
+        raw_signal,
+        channel_names,
+        save_path=None,
+        sfreq=128,
+        time_shift=0,
+        channels_to_show=None,
+        seizure_times_list=None,
+        seizure_times_colors=('red', 'green', 'blue', 'yellow', 'cyan'),
+        seizure_times_ls=('-', '--', ':'),
+):
+    # power_spectrum.shape = (C, F, T)
+    # raw_signal.shape = (C, T)
+
+    # if baseline_correction:
+    #     eps = 1e-9
+    #     power_spectrum_mean = np.mean(power_spectrum, axis=2, keepdims=True)
+    #     power_spectrum = (power_spectrum - power_spectrum_mean) / (power_spectrum_mean + eps)
+
+    # fig = plt.figure()
+    # plt.imshow(power_spectrum[0], cmap='viridis', aspect='auto', vmin=power_spectrum[0].min(), vmax=power_spectrum[0].max())
+    # plt.show()
+    # exit()
+
+    if channels_to_show is None:
+        channels_to_show = channel_names
+
+    channel_dim, freq_dim, time_dim = power_spectrum.shape[:3]
+
+    fig_row_idx = -1
+    fig, axes = plt.subplots(len(channels_to_show), 2, figsize=(30, 5 * len(channels_to_show)), num=1, clear=True)
+    fig.suptitle(f'Duration = {time_dim / sfreq:.2f}')
+    # for idx in range(power_spectrum.shape[0]):
+    for channel_to_show in channels_to_show:
+        if channel_to_show == '__avg__':
+            raw_signal_channel = np.mean(raw_signal, axis=0)
+            power_spectrum_channel = np.mean(power_spectrum, axis=0)
+            channel_name = '__avg__'
+        else:
+            idx = [channel_idx for channel_idx, channel_name in enumerate(channel_names) if channel_to_show in channel_name]
+            assert len(idx) == 1
+            idx = idx[0]
+
+            raw_signal_channel = raw_signal[idx]
+            power_spectrum_channel = power_spectrum[idx]
+            channel_name = channel_names[idx]
+
+        fig_row_idx += 1
+
+        ax_column_idx = fig_row_idx % 2
+        ax_row_idx = fig_row_idx - fig_row_idx % 2
+
+        time_values = np.linspace(time_shift, time_shift + time_dim / sfreq, raw_signal.shape[1])
+        axes[ax_row_idx, ax_column_idx].plot(time_values, raw_signal_channel)
+        axes[ax_row_idx, ax_column_idx].set_title(f'{channel_name}')
+        axes[ax_row_idx, ax_column_idx].set_ylabel('raw_signal')
+        axes[ax_row_idx, ax_column_idx].set_xlim([time_shift, time_shift + time_dim / sfreq])
+        axes[ax_row_idx, ax_column_idx].set_xlabel('Time (s)')
+        # axes[ax_row_idx, ax_column_idx].set_ylabel('Freq. (Hz)')
+        # axes[ax_row_idx, ax_column_idx].imshow(power_spectrum_channel, cmap=plt.cm.Reds, interpolation='none', extent=[0, 10, 40, 0])
+
+        # im = axes[ax_row_idx + 1, ax_column_idx].imshow(power_spectrum_channel, cmap=plt.cm.Reds, aspect="auto", vmin=power_spectrum_channel.min(), vmax=power_spectrum_channel.max())
+        im = axes[ax_row_idx + 1, ax_column_idx].imshow(power_spectrum_channel, cmap='viridis', aspect='auto', vmin=power_spectrum_channel.min(), vmax=power_spectrum_channel.max())
+        axes[ax_row_idx + 1, ax_column_idx].invert_yaxis()
+        axes[ax_row_idx + 1, ax_column_idx].set_title(f'{channel_name}')
+        # axes[ax_row_idx + 1, ax_column_idx].set_xlim([0, 0 + time_dim / sfreq])
+        axes[ax_row_idx + 1, ax_column_idx].set_xticks([0 + i * time_dim / 10 for i in range(0, 10)])
+        axes[ax_row_idx + 1, ax_column_idx].set_xticklabels([f'{time_shift + i * time_dim / 10 / sfreq}' for i in range(0, 10)])
+        axes[ax_row_idx + 1, ax_column_idx].set_yticks([i for i in np.linspace(0, len(np.arange(1, 40.01, 0.1)), 8)])
+        axes[ax_row_idx + 1, ax_column_idx].set_yticklabels([f'{i:.02f}' for i in np.linspace(1, 40, 8)])
+        axes[ax_row_idx + 1, ax_column_idx].set_xlabel('Time (s)')
+        axes[ax_row_idx + 1, ax_column_idx].set_ylabel('Freq. (Hz)')
+
+        divider = make_axes_locatable(axes[ax_row_idx + 1, ax_column_idx])
+        cax = divider.append_axes('bottom', size='5%', pad=0.5)
+        plt.colorbar(im, cax=cax, ax=axes[ax_row_idx + 1, ax_column_idx], orientation='horizontal')
+        # plt.show()
+
+        # add vertical lines
+        if seizure_times_list is not None:
+            for seizure_idx, seizure_time in enumerate(seizure_times_list):
+                print('seizure_times_colors', seizure_times_colors)
+                print('seizure_times_ls', seizure_times_ls)
+                print('len(seizure_times_list)', len(seizure_times_list))
+                print('seizure_idx', seizure_idx)
+                seizure_line_color = seizure_times_colors[seizure_idx % len(seizure_times_list)]
+                seizure_line_style = seizure_times_ls[seizure_idx % len(seizure_times_list)]
+                if time_shift <= (seizure_time['start'] + time_shift) <= (time_shift + time_dim / sfreq):
+                    x = time_shift + seizure_time['start']
+                    axes[ax_row_idx, ax_column_idx].axvline(x=x, color=seizure_line_color, ls=seizure_line_style, label=f'Seizure {seizure_idx:02} start')
+                    # plt.text(x, seizure_idx, f's{x:.1f}', color=seizure_line_color, rotation=90, verticalalignment='center')
+
+                    x = seizure_time['start'] * sfreq
+                    axes[ax_row_idx + 1, ax_column_idx].axvline(x=x, color=seizure_line_color, ls=seizure_line_style, label=f'Seizure {seizure_idx:02} start')
+                    # plt.text(x, seizure_idx, f's{x:.1f}', color=seizure_line_color, rotation=90, verticalalignment='center')
+                if time_shift <= (seizure_time['end'] + time_shift) <= (time_shift + time_dim / sfreq):
+                    x = time_shift + seizure_time['end']
+                    axes[ax_row_idx, ax_column_idx].axvline(x=x, color=seizure_line_color, ls=seizure_line_style, label=f'Seizure {seizure_idx:02} end')
+                    # plt.text(x, seizure_idx, f'e{x:.1f}', color=seizure_line_color, rotation=90, verticalalignment='center')
+
+                    x = seizure_time['end'] * sfreq
+                    axes[ax_row_idx + 1, ax_column_idx].axvline(x=x, color=seizure_line_color, ls=seizure_line_style, label=f'Seizure {seizure_idx:02} end')
+                    # plt.text(x, seizure_idx, f'e{x:.1f}', color=seizure_line_color, rotation=90, verticalalignment='center')
+
+    if save_path is not None:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+        plt.savefig(save_path, dpi=400, bbox_inches='tight', pad_inches=1)
+
+    fig.clear()
+    plt.close(fig)
+
+
 def visualize_spectrum_channels(power_spectrum, channel_names):
     # power_spectrum.shape = (C, F, T)
 

@@ -96,7 +96,7 @@ def find_best_tp(seizures, time_idxs_start, labels, probs, threshold, sfreq):
     return best_tp_time_idx_start, best_tp_prob
 
 
-def visualize_samples(samples, probs, channel_names, sfreq, baseline_mean, set_name, subject_key, visualization_dir):
+def visualize_samples(samples, probs, time_starts, channel_names, sfreq, baseline_mean, set_name, subject_key, visualization_dir, seizure_times_list=None, seizure_times_colors=('red', 'green', 'blue', 'yellow', 'cyan'), seizure_times_ls=('-', '--', ':')):
     # samples.shape = (1, C, T)
     freqs = np.arange(1, 40.01, 0.1)
 
@@ -121,22 +121,22 @@ def visualize_samples(samples, probs, channel_names, sfreq, baseline_mean, set_n
             power_spectrum_corrected,
             samples[idx],
             channel_names,
-            save_dir=os.path.join(set_dir, subject_key),
-            baseline_correction=True,
-        )
-        visualization.visualize_raw(
-            samples[idx],
-            channel_names,
-            save_dir=os.path.join(set_dir, subject_key),  # TODO: change save_dir to save_path
+            save_path=os.path.join(visualization_dir, set_name, f'{subject_key.replace("/", "_")}_seizure{int(probs[idx])}.png'),
+            sfreq=128,
+            time_shift=time_starts[idx],
+            channels_to_show=['F3', 'F4', 'T5', 'T6', 'P3', 'P4', 'Cz', '__avg__'],
+            seizure_times_list=seizure_times_list,
+            seizure_times_colors=seizure_times_colors,
+            seizure_times_ls=seizure_times_ls,
         )
 
-        visualization_path = os.path.join(
-            set_dir,
-            subject_key,
-            f'p={probs[idx]:7.6f}_{idx:04}_{subject_key}.png'
-        )
-        cv2.imwrite(visualization_path, (power_spectrum_visualization * 255).astype(np.uint8))
-        print(f'Saved {visualization_path}')
+        # visualization_path = os.path.join(
+        #     set_dir,
+        #     subject_key,
+        #     f'p={probs[idx]:7.6f}_{idx:04}_{subject_key}.png'
+        # )
+        # cv2.imwrite(visualization_path, (power_spectrum_visualization * 255).astype(np.uint8))
+        # print(f'Saved {visualization_path}')
 
 
 def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names, sfreq, visualization_dir):
@@ -176,6 +176,7 @@ def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names
         visualize_samples(
             fp_samples,
             fp_probs,
+            fp_start_times,
             channel_names,
             sfreq,
             baseline_mean,
@@ -203,6 +204,7 @@ def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names
         visualize_samples(
             fn_samples,
             fn_probs,
+            fn_start_times,
             channel_names,
             sfreq,
             baseline_mean,
@@ -229,6 +231,7 @@ def save_errors(subject_key, raw_data, prediction_data, threshold, channel_names
         visualize_samples(
             tp_samples,
             tp_probs,
+            tp_start_times,
             channel_names,
             sfreq,
             baseline_mean,
