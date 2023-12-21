@@ -18,21 +18,32 @@ def get_segments(prediction_data, threshold, filter_method='median', k_size=7, s
     probs_filtered = filter_predictions(probs, filter_method, k_size)
     preds = probs_filtered > threshold
 
-    # find spikes
-    spikes_num = 0
-    for idx in range(1, len(preds) - 1):
-        if preds[idx] != preds[idx - 1] and preds[idx] != preds[idx + 1]:
-            spikes_num += 1
+    # # find spikes
+    # spikes_num = 0
+    # for idx in range(1, len(preds) - 1):
+    #     if preds[idx] != preds[idx - 1] and preds[idx] != preds[idx + 1]:
+    #         spikes_num += 1
     # print(f'spikes_num = {spikes_num}')
 
     # extract segments
     idx = 0
+    segment_len = 0
+    segments = list()
     while idx < len(preds):
         segment_start_time = time_idxs_start[idx] / sfreq
         segment_type = preds[idx]
         while idx < len(preds) and preds[idx] == segment_type:
             idx += 1
+            segment_len += 1
         segment_end_time = time_idxs_end[idx - 1] / sfreq if idx != (len(preds) - 1) else time_idxs_end[idx]
+
+        segments.append({
+            'merged_segments_num': segment_len,
+            'start': segment_start_time,
+            'end': segment_end_time,
+            'seizure_segment': bool(segment_type),
+        })
+        segment_len = 0
 
         segment = {
             'start': segment_start_time,
@@ -42,6 +53,40 @@ def get_segments(prediction_data, threshold, filter_method='median', k_size=7, s
             seizure_segments.append(segment)
         else:
             normal_segments.append(segment)
+
+    # merge stochastic segments
+    idx = 0
+    segments_wo_stochastic = list()
+    while idx < len(segments):
+        segment_start_idx = idx
+        while idx < len(segments) and (segments[idx]['merged_segments_num'] <= 2 or segments[idx]['seizure_segment']):
+            idx += 1
+        segment_end_idx = idx
+
+        if (segment_end_idx - segment_start_idx) == 0:
+            segments_wo_stochastic.append(segments[idx])
+            idx += 1
+        else:
+            if not segments[segment_start_idx]['seizure_segment'] and segment_start_idx > 0:
+                assert segments[segment_start_idx - 1]['seizure_segment']
+                segment_start_idx -= 1
+                segments_wo_stochastic = segments_wo_stochastic[:-1]
+
+            if not segments[segment_end_idx - 1]['seizure_segment'] and segment_end_idx < len(segments):
+                assert segments[segment_end_idx]['seizure_segment']
+                segment_end_idx += 1
+                idx += 1
+
+            merged_stochastic_segment = {
+                'merged_segments_num': sum([segments[segment_start_idx + shift_idx]['merged_segments_num'] for shift_idx in range(segment_end_idx - segment_start_idx)]),
+                'start': segments[segment_start_idx]['start'],
+                'end': segments[segment_end_idx - 1]['end'],
+                'seizure_segment': True,
+            }
+            segments_wo_stochastic.append(merged_stochastic_segment)
+
+    normal_segments = [segment for segment in segments_wo_stochastic if not segment['seizure_segment']]
+    seizure_segments = [segment for segment in segments_wo_stochastic if segment['seizure_segment']]
 
     return normal_segments, seizure_segments
 
