@@ -162,11 +162,14 @@ def run_training(config):
 
     # Pretrained weights
     pretrained_epochs_num = 0
-    if 'pretrained_path' in config:
+    if 'pretrained_path' in config and config['pretrained_path'] is not None:
         checkpoint = utils.neural.training.load_checkpoint(config['pretrained_path'])
         state_dict = checkpoint['model']['state_dict']
-        state_dict = {f'model.{key}': value for key, value in state_dict.items()}
-        model.load_state_dict(state_dict)
+        try:
+            model.load_state_dict(state_dict)
+        except Exception as e:
+            state_dict = {f'model.{key}': value for key, value in state_dict.items()}
+            model.load_state_dict(state_dict)
 
         if 'optimizer' in checkpoint:
             optimizer.load_state_dict(checkpoint['optimizer']['state_dict'])
