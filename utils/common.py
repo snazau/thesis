@@ -80,7 +80,8 @@ def calc_segments_metrics(
         for seizure_true_idx, seizure_segment_true in enumerate(seizure_segments_true):
             overlapping_distance = overlapping_segment(seizure_segment_true, seizure_segment_pred)
             true_distance = seizure_segment_true['end'] - seizure_segment_true['start']
-            if overlapping_distance / true_distance > intersection_part_threshold:
+            # if overlapping_distance / true_distance > intersection_part_threshold:
+            if overlapping_distance / true_distance > intersection_part_threshold and seizures_true_used_mask[seizure_true_idx] == 0:
                 tp_num += 1
                 find_tp = True
                 seizures_true_used_mask[seizure_true_idx] += 1
