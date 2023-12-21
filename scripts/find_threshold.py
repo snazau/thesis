@@ -20,8 +20,12 @@ def get_best_threshold(experiment_dir, subject_keys, filter_method='median', k_s
             if verbose:
                 print(f'\rthreshold = {threshold:3.2f} Progress {threshold_idx + 1}/{len(threshold_range)} ', end='')
 
-            prediction_path = os.path.join(experiment_dir, 'predictions', rf'{subject_key}.pickle')
-            prediction_data = pickle.load(open(prediction_path, 'rb'))
+            try:
+                prediction_path = os.path.join(experiment_dir, 'predictions', rf'{subject_key}.pickle')
+                prediction_data = pickle.load(open(prediction_path, 'rb'))
+            except Exception as e:
+                prediction_path = os.path.join(experiment_dir, 'predictions_positive_only', rf'{subject_key}.pickle')
+                prediction_data = pickle.load(open(prediction_path, 'rb'))
 
             # get data from prediction_data
             time_idxs_start = prediction_data['time_idxs_start']
