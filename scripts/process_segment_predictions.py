@@ -1,7 +1,10 @@
 import os
 import pickle
 
+import numpy as np
+
 from utils.common import filter_predictions, calc_segments_metrics, overlapping_segment
+from scripts.visualize_errors import visualize_samples
 
 
 def get_segments(prediction_data, threshold, filter_method='median', k_size=7, sfreq=128):
@@ -122,7 +125,7 @@ def get_segments_from_predictions(experiment_dir, subject_keys, threshold, filte
                 'end': time_points[normal_segment_idx * 2 + 1],
             })
 
-        normal_segments_pred, seizure_segments_pred = get_segments(prediction_data, threshold, filter_method, k_size)
+        normal_segments_pred, seizure_segments_pred = get_segments(prediction_data, threshold, filter_method, k_size, sfreq)
         subject_key_to_pred_segments[subject_key] = {
             'normals_pred': normal_segments_pred,
             'seizures_pred': seizure_segments_pred,
@@ -137,20 +140,26 @@ def get_segments_from_predictions(experiment_dir, subject_keys, threshold, filte
 def find_closest_segments(curr_segment, segments_to_search):
     closest_segment = None
     closest_distance = float('inf')
+    overlapping_distance = 0
     for segment_to_search in segments_to_search:
+        curr_overlapping_distance = overlapping_segment(curr_segment, segment_to_search)
+
         if segment_to_search['start'] <= curr_segment['start'] <= segment_to_search['end']:
             closest_segment = segment_to_search
             closest_distance = 0
+            overlapping_distance = curr_overlapping_distance
             break
 
         if segment_to_search['start'] <= curr_segment['end'] <= segment_to_search['end']:
             closest_segment = segment_to_search
             closest_distance = 0
+            overlapping_distance = curr_overlapping_distance
             break
 
-        if overlapping_segment(curr_segment, segment_to_search) > 0:
+        if overlapping_distance > 0:
             closest_segment = segment_to_search
             closest_distance = 0
+            overlapping_distance = curr_overlapping_distance
             break
 
         curr_distance = min(
@@ -164,39 +173,50 @@ def find_closest_segments(curr_segment, segments_to_search):
             closest_distance = curr_distance
             closest_segment = segment_to_search
 
-    return closest_segment, closest_distance
+    return closest_segment, closest_distance, overlapping_distance
 
 
-def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizure_segments_pred):
+def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizure_segments_pred, intersection_part_threshold):
     import eeg_reader
     import datasets.datasets_static
     import visualization
 
-    raw = eeg_reader.EEGReader.read_eeg(subject_eeg_path)
-    channel_names = raw.info['ch_names']
+    raw = eeg_reader.EEGReader.read_eeg(subject_eeg_path, preload=True)
     datasets.datasets_static.drop_unused_channels(subject_eeg_path, raw)
+    channel_names = raw.info['ch_names']
     recording_duration = raw.times.max() - raw.times.min()
+
+    # baseline stats
+    import numpy as np
+    freqs = np.arange(1, 40.01, 0.1)
+    baseline_mean, baseline_std = datasets.datasets_static.get_baseline_stats(
+        raw,
+        baseline_length_in_seconds=500,
+        sfreq=raw.info['sfreq'],
+        freqs=freqs,
+    )
 
     # Noise reduction
     raw_filtered = None
-    subset_name = os.path.basename(os.path.dirname(subject_eeg_path))
-    subject_name = os.path.splitext(os.path.basename(subject_eeg_path))[0]
-    ica_dir = 'D:/Study/asp/thesis/implementation/data/ica_20231023/'
-    ica_path = os.path.join(ica_dir, subset_name, f'{subject_name}.fif')
-    if os.path.exists(ica_path):
-        import mne
-        import copy
-        ica = mne.preprocessing.read_ica(ica_path)
-        raw_filtered = ica.apply(copy.deepcopy(raw))
+    # subset_name = os.path.basename(os.path.dirname(subject_eeg_path))
+    # subject_name = os.path.splitext(os.path.basename(subject_eeg_path))[0]
+    # ica_dir = 'D:/Study/asp/thesis/implementation/data/ica_20231023/'
+    # ica_path = os.path.join(ica_dir, subset_name, f'{subject_name}.fif')
+    # if os.path.exists(ica_path):
+    #     import mne
+    #     import copy
+    #     ica = mne.preprocessing.read_ica(ica_path)
+    #     raw_filtered = ica.apply(copy.deepcopy(raw))
 
+    padding_sec = 10
     for seizure_idx, seizure_segment_pred in enumerate(seizure_segments_pred):
-        closest_segment, closest_distance = find_closest_segments(seizure_segment_pred, seizure_segments_true)
+        closest_segment, closest_distance, overlapping_distance = find_closest_segments(seizure_segment_pred, seizure_segments_true)
 
         segment_min_start_time = min(closest_segment['start'], seizure_segment_pred['start']) if closest_distance < 600 else seizure_segment_pred['start']
         segment_max_end_time = max(closest_segment['end'], seizure_segment_pred['end']) if closest_distance < 600 else seizure_segment_pred['end']
 
-        start_time = max(0, segment_min_start_time - 60 * 2)
-        duration = segment_max_end_time - segment_min_start_time + 60 * 4
+        start_time = max(0, segment_min_start_time - padding_sec)
+        duration = segment_max_end_time - segment_min_start_time + padding_sec * 2
         if (start_time + duration) > recording_duration:
             duration = duration - (start_time + duration - recording_duration) - 1
 
@@ -209,29 +229,44 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
 
         segments_to_visualize = [
             {
-                'start': seizure_segment_pred['start'] - segment_min_start_time + 60 * 2,
-                'end': seizure_segment_pred['end'] - segment_min_start_time + 60 * 2,
+                'start': seizure_segment_pred['start'] - segment_min_start_time + padding_sec,
+                'end': seizure_segment_pred['end'] - segment_min_start_time + padding_sec,
             },
             {
-                'start': closest_segment['start'] - segment_min_start_time + 60 * 2,
-                'end': closest_segment['end'] - segment_min_start_time + 60 * 2,
+                'start': closest_segment['start'] - segment_min_start_time + padding_sec,
+                'end': closest_segment['end'] - segment_min_start_time + padding_sec,
             },
         ]
         print(seizure_idx, segments_to_visualize)
 
-        if closest_distance == 0:  # TP
-            save_path = os.path.join(save_dir, 'tp', f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx)}.png')
-        else:  # FP
-            save_path = os.path.join(save_dir, 'fp', f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx)}.png')
+        seizure_distance = closest_segment['end'] - closest_segment['start']
+        print(f'subject_key = {subject_key} seizure_idx = {seizure_idx} closest_distance = {closest_distance} seizure_distance = {seizure_distance} overlapping_distance = {overlapping_distance} overlap = {overlapping_distance / seizure_distance}')
+        set_name = 'tp' if overlapping_distance / seizure_distance > intersection_part_threshold else 'fp'
+        save_name = f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx)}.png'
+        save_path = os.path.join(save_dir, set_name, save_name)
 
-        visualization.visualize_raw(
-            seizure_sample[0],
+        # visualization.visualize_raw(
+        #     seizure_sample[0],
+        #     channel_names,
+        #     seizure_times_list=segments_to_visualize,
+        #     heatmap=None,
+        #     save_path=save_path,
+        # )
+        print(f'Saved to {set_name}/{save_name}')
+
+        seizure_probs = [int(seizure_idx)]
+        visualize_samples(
+            seizure_sample,
+            seizure_probs,
+            [start_time],
             channel_names,
+            sfreq=128,
+            baseline_mean=baseline_mean,
+            set_name=set_name,
+            subject_key=subject_key,
+            visualization_dir=save_dir,
             seizure_times_list=segments_to_visualize,
-            heatmap=None,
-            save_path=save_path,
         )
-        print(f'Saved to {save_path}')
 
         if raw_filtered is not None:
             seizure_sample_filtered, _, _ = datasets.datasets_static.generate_raw_samples(
@@ -253,15 +288,23 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
             )
 
     for seizure_idx, seizure_segment_true in enumerate(seizure_segments_true):
-        overlap_with_pred = any([
+        overlap_distances = [
             overlapping_segment(seizure_segment_true, seizure_segment_pred)
             for seizure_segment_pred in seizure_segments_pred
+        ]
+        seizure_distance = seizure_segment_true['end'] - seizure_segment_true['start']
+        overlap_with_pred = any([
+            overlap_distance / seizure_distance > intersection_part_threshold
+            for overlap_distance in overlap_distances
         ])
+
+        print('seizure_idx_true', seizure_idx, seizure_segment_true, overlap_with_pred, overlap_distances)
+
         if overlap_with_pred:
             continue
 
-        start_time = max(0, seizure_segment_true['start'] - 60 * 2)
-        duration = seizure_segment_true['end'] - seizure_segment_true['start'] + 60 * 4
+        start_time = max(0, seizure_segment_true['start'] - padding_sec)
+        duration = seizure_segment_true['end'] - seizure_segment_true['start'] + padding_sec * 2
         if (start_time + duration) > recording_duration:
             duration = duration - (start_time + duration - recording_duration) - 1
 
@@ -274,24 +317,56 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
 
         segments_to_visualize = [
             {
-                'start': 60 * 2,
-                'end': seizure_segment_true['end'] - seizure_segment_true['start'] + 60 * 2,
+                'start': padding_sec,
+                'end': seizure_segment_true['end'] - seizure_segment_true['start'] + padding_sec,
             },
         ]
+        if len(overlap_distances) > 0:
+            max_overlap_idx = np.argmax(np.array(overlap_distances))
+            segments_to_visualize.append(
+                {
+                    'start': seizure_segments_pred[max_overlap_idx]['start'] - seizure_segment_true['start'] + padding_sec,
+                    'end': seizure_segments_pred[max_overlap_idx]['end'] - seizure_segment_true['start'] + padding_sec,
+                },
+            )
+            seizure_times_colors = ('green', 'red')
+            seizure_times_ls = ('--', '-')
+        else:
+            seizure_times_colors = ('green', )
+            seizure_times_ls = ('--', )
+        print(int(seizure_idx + len(seizure_segments_pred)), segments_to_visualize)
 
         # FN
-        save_path = os.path.join(save_dir, 'fn', f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx + len(seizure_segments_pred))}.png')
+        set_name = 'fn'
+        save_name = f'{subject_key.replace("/", "_")}_seizure{int(seizure_idx + len(seizure_segments_pred))}.png'
+        save_path = os.path.join(save_dir, set_name, save_name)
 
-        visualization.visualize_raw(
-            seizure_sample[0],
+        # visualization.visualize_raw(
+        #     seizure_sample[0],
+        #     channel_names,
+        #     seizure_times_colors=('green', 'red'),
+        #     seizure_times_ls=('--', '-'),
+        #     seizure_times_list=segments_to_visualize,
+        #     heatmap=None,
+        #     save_path=save_path,
+        # )
+        print(f'Saved to {set_name}/{save_name}')
+
+        seizure_probs = [int(seizure_idx + len(seizure_segments_pred))]
+        visualize_samples(
+            seizure_sample,
+            seizure_probs,
+            [start_time],
             channel_names,
-            seizure_times_colors=('green', ),
-            seizure_times_ls=('--', ),
+            sfreq=128,
+            baseline_mean=baseline_mean,
+            set_name=set_name,
+            subject_key=subject_key,
+            visualization_dir=save_dir,
             seizure_times_list=segments_to_visualize,
-            heatmap=None,
-            save_path=save_path,
+            seizure_times_colors=seizure_times_colors,
+            seizure_times_ls=seizure_times_ls,
         )
-        print(f'Saved to {save_path}')
 
         if raw_filtered is not None:
             seizure_sample_filtered, _, _ = datasets.datasets_static.generate_raw_samples(
@@ -305,8 +380,8 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
             visualization.visualize_raw(
                 seizure_sample_filtered[0],
                 channel_names,
-                seizure_times_colors=('green',),
-                seizure_times_ls=('--',),
+                seizure_times_colors=seizure_times_colors,
+                seizure_times_ls=seizure_times_ls,
                 seizure_times_list=segments_to_visualize,
                 heatmap=None,
                 save_path=save_path,
@@ -519,7 +594,7 @@ if __name__ == '__main__':
 
             try:
                 subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
-                visualize_predicted_segments(subject_eeg_path, segments_dict['seizures'], segments_dict['seizures_pred'])
+                visualize_predicted_segments(subject_eeg_path, segments_dict['seizures'], segments_dict['seizures_pred'], intersection_part_threshold)
             except Exception as e:
                 import traceback
 
