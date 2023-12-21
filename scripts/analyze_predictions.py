@@ -99,6 +99,7 @@ def visualize_prediction(prediction_data, probs_filtered, visualization_path, sf
         )
 
         # fig.show()
+        os.makedirs(os.path.dirname(visualization_path), exist_ok=True)
         fig.write_html(visualization_path, auto_open=False)
 
 
