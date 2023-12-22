@@ -390,6 +390,71 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
     del raw
 
 
+def get_segment_metrics(experiment_dir, subject_keys, intersection_part_threshold, threshold, filter_method, k_size, verbose=1):
+    subject_key_to_pred_segments = get_segments_from_predictions(
+        experiment_dir,
+        subject_keys,
+        threshold,
+        filter_method,
+        k_size,
+    )
+    # import pprint
+    # pprint.pprint(subject_key_to_pred_segments)
+
+    # calculate metric for segments
+    import utils.avg_meters
+    metric_meter = utils.avg_meters.MetricMeter()
+    for subject_idx, subject_key in enumerate(subject_key_to_pred_segments.keys()):
+        segments_dict = subject_key_to_pred_segments[subject_key]
+        metrics_dict = calc_segments_metrics(
+            segments_dict['seizures'],
+            segments_dict['normals'],
+            segments_dict['seizures_pred'],
+            segments_dict['normals_pred'],
+            intersection_part_threshold=intersection_part_threshold,
+        )
+        metric_meter.update(metrics_dict)
+        if verbose > 1:
+            print(
+                f'{subject_key:60}'
+                f'threshold = {threshold:3.2f} '
+                f'p = {metrics_dict["precision_score"]:10.4f} ({metric_meter.meters["precision_score"].avg:10.4f}) '
+                f'r = {metrics_dict["recall_score"]:10.4f} ({metric_meter.meters["recall_score"].avg:10.4f}) '
+                f'f1 = {metrics_dict["f1_score"]:10.4f} ({metric_meter.meters["f1_score"].avg:10.4f}) '
+                f'tp = {metrics_dict["tp_num"]:6} ({metric_meter.meters["tp_num"].avg:6.2f}) '
+                f'tn = {metrics_dict["tn_num"]:6} ({metric_meter.meters["tn_num"].avg:6.2f}) '
+                f'fp = {metrics_dict["fp_num"]:6} ({metric_meter.meters["fp_num"].avg:6.2f}) '
+                # f'fn = {metrics_dict["fn_num"]:6} ({metric_meter.meters["fn_num"].avg:6.2f}) '
+                f'duration = {metrics_dict["duration"]:6.2f}'
+            )
+        # print(f'#{subject_idx + 1:02} subject_key = {subject_key:60} subject_metrics {" ".join([f"{key} = {value:9.4f}" for key, value in metrics_dict.items()])}')
+    # print('metric_meter\n', metric_meter)
+
+    return metric_meter
+
+
+def get_best_threshold_for_segment_merging(experiment_dir, subject_keys, intersection_part_threshold, min_recall_threshold, filter_method, k_size, verbose=1):
+    assert 0 < min_recall_threshold <= 1
+
+    best_avg_precision = -1
+    best_threshold = -1
+    best_metric_meter = None
+    threshold_range = list(np.round(np.arange(0.1, 1, 0.05), 2))
+    for threshold_idx, threshold in enumerate(threshold_range):
+        metric_meter = get_segment_metrics(experiment_dir, subject_keys, intersection_part_threshold, threshold, filter_method, k_size, verbose)
+
+        if metric_meter.meters['recall_score'].avg > min_recall_threshold and metric_meter.meters['precision_score'].avg > best_avg_precision:
+            best_avg_precision = metric_meter.meters['precision_score'].avg
+            best_threshold = threshold
+            best_metric_meter = metric_meter
+
+        if verbose:
+            # print(f'threshold = {threshold:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} long_postivies = {metric_meter.meters["long_postivies"].avg:.4f} {"best_threshold" if threshold == best_threshold else ""}')
+            print(f'threshold = {threshold:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} long_postivies = {metric_meter.meters["long_postivies"].sum:7.4f} best_threshold = {best_threshold:3.2f}')
+
+    return best_threshold, best_metric_meter
+
+
 if __name__ == '__main__':
     # parameters
     # experiment_name = '20231012_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded'
@@ -404,9 +469,12 @@ if __name__ == '__main__':
     # experiment_name = 'SVM_outliers_new_data_000250'
     experiment_dir = os.path.join(rf'D:\Study\asp\thesis\implementation\experiments', experiment_name)
 
+    # global settings
     visualize_segments = False
     exclude_16 = True
     filter = True
+    verbose = 1
+    min_recall_threshold = 0.9
     intersection_part_threshold = 0.51
 
     if filter:
@@ -420,24 +488,24 @@ if __name__ == '__main__':
     print(f'filter={filter_method} k={k_size} exclude_16={exclude_16}')
     print()
 
-    # find best threshold
+    # evaluating val to find best_threshold for 10sec preds
+    print('evaluating val to find best_threshold for 10sec preds')
     import data_split
-    subject_keys = data_split.get_subject_keys_train()
+    subject_keys = data_split.get_subject_keys_val()
     subject_keys_exclude = data_split.get_subject_keys_exclude_16()
     if exclude_16:
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
-    from scripts.find_threshold import get_best_threshold
+    from scripts.find_threshold import get_best_threshold, get_metrics
     try:
         best_threshold, best_metric_meter = get_best_threshold(
             experiment_dir,
             subject_keys,
             filter_method,
             k_size,
-            verbose=1,
+            verbose,
         )
-        print(f'\nbest_threshold = {best_threshold} best_metric_meter:\n{best_metric_meter}')
-        print()
+        print(f'val best_threshold = {best_threshold} best_metric_meter:\n{best_metric_meter}')
     except Exception as e:
         best_threshold = 0.95  # resnet stage1
         # best_threshold = 0.55  # resnet stage2
@@ -445,40 +513,92 @@ if __name__ == '__main__':
         print(f'Setting best_threshold = {best_threshold}')
         raise e
 
-    # get segments pred
-    subject_keys = data_split.get_subject_keys_val() + data_split.get_subject_keys_test()
+    # evaluating test performance with best_threshold for 10sec preds
+    print('evaluating test performance with best_threshold for 10sec preds')
+    import utils.avg_meters
+
+    subject_keys = data_split.get_subject_keys_test() + data_split.get_subject_keys_val()
+    subject_keys_exclude = data_split.get_subject_keys_exclude_16()
     if exclude_16:
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
-    threshold_range = list(np.round(np.arange(0.1, 1, 0.05), 2))
-    for threshold_idx, threshold in enumerate(threshold_range):
-        subject_key_to_pred_segments = get_segments_from_predictions(
-            experiment_dir,
-            subject_keys,
-            threshold,
-            filter_method,
-            k_size,
-        )
-        # import pprint
-        # pprint.pprint(subject_key_to_pred_segments)
+    metric_meter = get_metrics(
+        experiment_dir,
+        subject_keys,
+        best_threshold,
+        filter_method,
+        k_size,
+        verbose,
+    )
+    print(f'test threshold = {best_threshold:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} best_threshold = {best_threshold:3.2f} best_f1_score = {best_metric_meter.meters["f1_score"].avg:.4f}')
+    print()
 
-        # calculate metric for segments
-        import utils.avg_meters
-        metric_meter = utils.avg_meters.MetricMeter()
-        for subject_idx, subject_key in enumerate(subject_key_to_pred_segments.keys()):
-            segments_dict = subject_key_to_pred_segments[subject_key]
-            metrics_dict = calc_segments_metrics(
-                segments_dict['seizures'],
-                segments_dict['normals'],
-                segments_dict['seizures_pred'],
-                segments_dict['normals_pred'],
-                intersection_part_threshold=intersection_part_threshold,
-            )
-            metric_meter.update(metrics_dict)
-            # print(f'#{subject_idx + 1:02} subject_key = {subject_key:60} subject_metrics {" ".join([f"{key} = {value:9.4f}" for key, value in metrics_dict.items()])}')
-        # print('metric_meter\n', metric_meter)
-        print(f'threshold = {threshold:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} long_postivies = {metric_meter.meters["long_postivies"].avg:.4f} {"best_threshold" if threshold == best_threshold else ""}')
-    # exit()
+    # evaluating val to find best_threshold_segment for merging of 10sec preds into arbitrary long segments
+    print('evaluating val to find best_threshold_segment for merging of 10sec preds into arbitrary long segments')
+    # subject_keys = data_split.get_subject_keys_val() + data_split.get_subject_keys_test()
+    subject_keys = data_split.get_subject_keys_val()
+    if exclude_16:
+        subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
+
+    best_threshold_segment, best_metric_meter_segment = get_best_threshold_for_segment_merging(
+        experiment_dir,
+        subject_keys,
+        intersection_part_threshold,
+        min_recall_threshold,
+        filter_method,
+        k_size,
+        verbose,
+    )
+    print(f'val best_threshold_segment = {best_threshold_segment} best_metric_meter_segment:\n{best_metric_meter_segment}')
+
+    # evaluating test performance with arbitrary long segments and best_threshold_segment
+    print('evaluating test performance with arbitrary long segments and best_threshold_segment')
+    subject_keys = data_split.get_subject_keys_test() + data_split.get_subject_keys_val()
+    subject_keys_exclude = data_split.get_subject_keys_exclude_16()
+    if exclude_16:
+        subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
+
+    metric_meter = get_segment_metrics(
+        experiment_dir,
+        subject_keys,
+        intersection_part_threshold,
+        best_threshold_segment,
+        filter_method,
+        k_size,
+        verbose,
+    )
+    print(f'test threshold = {best_threshold_segment:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} long_postivies = {metric_meter.meters["long_postivies"].sum:7.4f} best_threshold = {best_threshold:3.2f}')
+    print('\n')
+
+    # threshold_range = list(np.round(np.arange(0.1, 1, 0.05), 2))
+    # for threshold_idx, threshold in enumerate(threshold_range):
+    #     subject_key_to_pred_segments = get_segments_from_predictions(
+    #         experiment_dir,
+    #         subject_keys,
+    #         threshold,
+    #         filter_method,
+    #         k_size,
+    #     )
+    #     # import pprint
+    #     # pprint.pprint(subject_key_to_pred_segments)
+    #
+    #     # calculate metric for segments
+    #     import utils.avg_meters
+    #     metric_meter = utils.avg_meters.MetricMeter()
+    #     for subject_idx, subject_key in enumerate(subject_key_to_pred_segments.keys()):
+    #         segments_dict = subject_key_to_pred_segments[subject_key]
+    #         metrics_dict = calc_segments_metrics(
+    #             segments_dict['seizures'],
+    #             segments_dict['normals'],
+    #             segments_dict['seizures_pred'],
+    #             segments_dict['normals_pred'],
+    #             intersection_part_threshold=intersection_part_threshold,
+    #         )
+    #         metric_meter.update(metrics_dict)
+    #         # print(f'#{subject_idx + 1:02} subject_key = {subject_key:60} subject_metrics {" ".join([f"{key} = {value:9.4f}" for key, value in metrics_dict.items()])}')
+    #     # print('metric_meter\n', metric_meter)
+    #     print(f'threshold = {threshold:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} long_postivies = {metric_meter.meters["long_postivies"].avg:.4f} {"best_threshold" if threshold == best_threshold else ""}')
+    # # exit()
 
     # visualize segments
     if visualize_segments:
@@ -492,6 +612,18 @@ if __name__ == '__main__':
         dataset_info_path = r'D:\Study\asp\thesis\implementation\data\dataset_info.json'
         with open(dataset_info_path) as f:
             dataset_info = json.load(f)
+
+        subject_keys = data_split.get_subject_keys_test() + data_split.get_subject_keys_val()
+        subject_keys_exclude = data_split.get_subject_keys_exclude_16()
+        if exclude_16:
+            subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
+        subject_key_to_pred_segments = get_segments_from_predictions(
+            experiment_dir,
+            subject_keys,
+            best_threshold_segment,
+            filter_method,
+            k_size,
+        )
 
         for subject_idx, subject_key in enumerate(subject_key_to_pred_segments.keys()):
             print(f'{subject_idx}/{len(subject_key_to_pred_segments)} subject_key = {subject_key}')
