@@ -27,7 +27,7 @@ def filter_predictions(probs, filter, k_size):
     return probs_filtered
 
 
-def calc_metrics(probs, labels, threshold):
+def calc_metrics(probs, labels, threshold, record_duration):
     # metrics
     preds = probs > threshold
 
@@ -50,6 +50,11 @@ def calc_metrics(probs, labels, threshold):
     tn_mask = ((labels == 0) & (probs <= threshold))
     tn_num = tn_mask.sum()
 
+    fp_per_hour = fp_num / record_duration
+    fn_per_hour = fn_num / record_duration
+    tp_per_hour = tp_num / record_duration
+    tn_per_hour = tn_num / record_duration
+
     metric_dict = {
         'f1_score': f1_score,
         'precision_score': precision_score,
@@ -58,6 +63,11 @@ def calc_metrics(probs, labels, threshold):
         'tp_num': tp_num,
         'fn_num': fn_num,
         'tn_num': tn_num,
+        'fp_per_h': fp_per_hour,
+        'tp_per_h': tp_per_hour,
+        'fn_per_h': fn_per_hour,
+        'tn_per_h': tn_per_hour,
+        'duration': record_duration,
     }
 
     return metric_dict
@@ -69,6 +79,7 @@ def calc_segments_metrics(
         seizure_segments_pred,
         normal_segments_pred,
         intersection_part_threshold,
+        record_duration,  # record duration in hours
 ):
     assert 0 < intersection_part_threshold <= 1
 
@@ -111,6 +122,10 @@ def calc_segments_metrics(
     recall_score = tp_num / (tp_num + fn_num) if (tp_num + fn_num) > 0 else 0
     f1_score = 2 * precision_score * recall_score / (precision_score + recall_score) if (precision_score + recall_score) > 0 else 0
 
+    fp_per_hour = fp_num / record_duration
+    fn_per_hour = fn_num / record_duration
+    tp_per_hour = tp_num / record_duration
+
     metric_dict = {
         'f1_score': f1_score,
         'precision_score': precision_score,
@@ -118,8 +133,13 @@ def calc_segments_metrics(
         'fp_num': fp_num,
         'tp_num': tp_num,
         'fn_num': fn_num,
-        'long_postivies': long_postivies,
         'tn_num': -1,
+        'fp_per_h': fp_per_hour,
+        'tp_per_h': tp_per_hour,
+        'fn_per_h': fn_per_hour,
+        'tn_per_h': -1,
+        'long_postivies': long_postivies,
+        'duration': record_duration
     }
 
     return metric_dict

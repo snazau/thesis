@@ -10,9 +10,6 @@ from utils.common import filter_predictions, calc_metrics
 def get_metrics(experiment_dir, subject_keys, threshold, filter_method='median', k_size=7, sfreq=128, verbose=0):
     metric_meter = utils.avg_meters.MetricMeter()
     for subject_key in subject_keys:
-        if verbose:
-            print(f'\rthreshold = {threshold:3.2f} ', end='')
-
         try:
             prediction_path = os.path.join(experiment_dir, 'predictions', rf'{subject_key}.pickle')
             prediction_data = pickle.load(open(prediction_path, 'rb'))
@@ -32,8 +29,8 @@ def get_metrics(experiment_dir, subject_keys, threshold, filter_method='median',
         probs_filtered = filter_predictions(probs, filter_method, k_size)
 
         # metrics
-        subject_metrics = calc_metrics(probs_filtered, labels, threshold)
-        subject_metrics['duration'] = (time_idxs_end[-1] / sfreq - time_idxs_start[0] / sfreq) / 3600
+        record_duration = (time_idxs_end[-1] / sfreq - time_idxs_start[0] / sfreq) / 3600
+        subject_metrics = calc_metrics(probs_filtered, labels, threshold, record_duration)
 
         metric_meter.update(subject_metrics)
 
@@ -51,6 +48,24 @@ def get_metrics(experiment_dir, subject_keys, threshold, filter_method='median',
                 f'duration = {subject_metrics["duration"]:6.2f}'
             )
 
+    fp_per_hour_micro = metric_meter.meters['fp_num'].sum / metric_meter.meters['duration'].sum
+    fn_per_hour_micro = metric_meter.meters['fn_num'].sum / metric_meter.meters['duration'].sum
+    tp_per_hour_micro = metric_meter.meters['tp_num'].sum / metric_meter.meters['duration'].sum
+    tn_per_hour_micro = metric_meter.meters['tn_num'].sum / metric_meter.meters['duration'].sum
+    precision_score_micro = metric_meter.meters['tp_num'].sum / (metric_meter.meters['tp_num'].sum + metric_meter.meters['fp_num'].sum)
+    recall_score_micro = metric_meter.meters['tp_num'].sum / (metric_meter.meters['tp_num'].sum + metric_meter.meters['fn_num'].sum)
+    f1_score_micro = 2 * precision_score_micro * recall_score_micro / (precision_score_micro + recall_score_micro) if (precision_score_micro + recall_score_micro) > 0 else 0
+
+    metric_meter.update({
+        'precision_score_micro': precision_score_micro,
+        'recall_score_micro': recall_score_micro,
+        'f1_score_micro': f1_score_micro,
+        'fp_per_h_micro': fp_per_hour_micro,
+        'fn_per_h_micro': fn_per_hour_micro,
+        'tp_per_h_micro': tp_per_hour_micro,
+        'tn_per_h_micro': tn_per_hour_micro,
+    })
+
     return metric_meter
 
 
@@ -60,7 +75,7 @@ def get_best_threshold(experiment_dir, subject_keys, filter_method='median', k_s
     best_avg_f1 = -1
     best_threshold = -1
     best_metric_meter = None
-    threshold_range = list(np.round(np.arange(0.1, 1, 0.05), 2))
+    threshold_range = list(np.round(np.arange(0.05, 1, 0.05), 2))
     for threshold_idx, threshold in enumerate(threshold_range):
         metric_meter = get_metrics(experiment_dir, subject_keys, threshold, filter_method, k_size, sfreq, verbose)
 
@@ -70,7 +85,24 @@ def get_best_threshold(experiment_dir, subject_keys, filter_method='median', k_s
             best_metric_meter = metric_meter
 
         if verbose:
-            print(f'threshold = {threshold:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} best_threshold = {best_threshold:3.2f} best_f1_score = {best_metric_meter.meters["f1_score"].avg:.4f}')
+            print(
+                f't = {threshold:3.2f} '
+                f'f1 = {metric_meter.meters["f1_score"].avg:.4f} '
+                f'p = {metric_meter.meters["precision_score"].avg:.4f} '
+                f'r = {metric_meter.meters["recall_score"].avg:.4f} '
+                f'fp = {metric_meter.meters["fp_num"].avg:10.4f} ({metric_meter.meters["fp_num"].sum:6}) '
+                f'fn = {metric_meter.meters["fn_num"].avg:10.4f} ({metric_meter.meters["fn_num"].sum:6}) '
+                f'tp = {metric_meter.meters["tp_num"].avg:10.4f} ({metric_meter.meters["tp_num"].sum:6}) '
+                f'fp_per_h = {metric_meter.meters["fp_per_h"].avg:10.4f} '
+                f'fn_per_h = {metric_meter.meters["fn_per_h"].avg:10.4f} '
+                f'tp_per_h = {metric_meter.meters["tp_per_h"].avg:10.4f} '
+                f'fp_per_h_micro = {metric_meter.meters["fp_per_h_micro"].avg:10.4f} '
+                f'fn_per_h_micro = {metric_meter.meters["fn_per_h_micro"].avg:10.4f} '
+                f'tp_per_h_micro = {metric_meter.meters["tp_per_h_micro"].avg:10.4f} '
+                f'p_micro = {metric_meter.meters["precision_score_micro"].avg:.4f} '
+                f'r_micro = {metric_meter.meters["recall_score_micro"].avg:.4f} '
+                f'best_t = {best_threshold:3.2f} '
+                f'best_f1 = {best_metric_meter.meters["f1_score"].avg:.4f}')
 
     return best_threshold, best_metric_meter
 

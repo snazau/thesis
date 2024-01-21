@@ -67,7 +67,27 @@ class MetricMeter(object):
     def __str__(self):
         output_str = []
         for name, meter in self.meters.items():
-            output_str.append(
-                '{} = {:10.4f}'.format(name, meter.avg)
-            )
+            metric_str = f'{name} = {meter.avg:10.4f}'
+            if '_num' in name or 'duration' in name:
+                metric_str += f' ({meter.sum:7})'
+
+            if '_num' in name:
+                metric_str = metric_str.replace('_num', '')
+
+            if '_score' in name:
+                metric_str = metric_str.replace('_score', '')
+
+            if 'precision' in name:
+                metric_str = metric_str.replace('precision', 'p')
+
+            if 'recall' in name:
+                metric_str = metric_str.replace('recall', 'r')
+
+            if 'positives' in name:
+                metric_str = metric_str.replace('positives', 'pos')
+
+            if 'negatives' in name:
+                metric_str = metric_str.replace('negatives', 'neg')
+
+            output_str.append(metric_str)
         return self.delimiter.join(output_str)
