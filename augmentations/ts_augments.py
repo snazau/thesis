@@ -64,6 +64,29 @@ class AddNoise:
         return sample
 
 
+class AddNoiseBaseline:
+    def __init__(self, p):
+        self.p = p
+
+    def __call__(self, sample):
+        assert 'baseline_mean' in sample
+
+        # data.shape = (1, C, T)
+        if random.random() < self.p:
+            data = torch.permute(sample['data'], (0, 2, 1)).cpu().numpy()
+
+            loc = np.zeros_like(data)
+            scale = np.zeros_like(data) + np.abs(sample['baseline_mean'][..., 0])
+            scale /= 10
+
+            noise = np.random.normal(loc, scale)
+            data_augmented = data + noise
+
+            data_augmented = torch.permute(torch.from_numpy(data_augmented), (0, 2, 1))
+            sample['data'] = data_augmented
+        return sample
+
+
 if __name__ == "__main__":
     import numpy as np
     import utils.neural.training
