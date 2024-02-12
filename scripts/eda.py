@@ -55,7 +55,7 @@ if __name__ == '__main__':
     whole_duration_avg = whole_durations.mean()
 
     print(f'avg_percent = {avg_percent * 100:.4f}% total_percent = {total_percent * 100:.4f}%')
-    print(f'total_normal = {total_normal / 3600:.2f}h total_seizure = {total_seizure / 3600:.2f}h total_duration = {total_duration / 3600:.2f}h')
+    print(f'total_normal = {total_normal / 3600:.2f}h ({total_normal / total_duration * 100:.2f}%) total_seizure = {total_seizure / 3600:.2f}h ({total_seizure / total_duration * 100:.2f}%) total_duration = {total_duration / 3600:.2f}h (100.00%)')
     print(f'whole_duration_avg = {whole_duration_avg / 3600}h')
 
     all_seizure_durations = np.array(all_seizure_durations)
