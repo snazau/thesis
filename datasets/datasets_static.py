@@ -391,23 +391,19 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         if not self.prediction_data_only_positives:
             # get start time for samples
             seizure_times = custom_distribution.unifrom_segments_sample(size=self.samples_num, segments=self.seizures)
-            assert all(
-                [
-                    any([seizure['start'] < seizure_time < seizure['end'] for seizure in self.seizures])
-                    for seizure_time in seizure_times
-                ]
-            )
+            assert all([
+                any([seizure['start'] < seizure_time < seizure['end'] for seizure in self.seizures])
+                for seizure_time in seizure_times
+            ])
 
             normal_times = custom_distribution.unifrom_segments_sample(size=self.samples_num, segments=self.normal_segments)
-            assert all(
-                [
-                    any(
-                        [normal_segment['start'] < normal_time < normal_segment['end'] for normal_segment in
-                         self.normal_segments]
-                    )
-                    for normal_time in normal_times
-                ]
-            )
+            assert all([
+                any(
+                    [normal_segment['start'] < normal_time < normal_segment['end'] for normal_segment in
+                     self.normal_segments]
+                )
+                for normal_time in normal_times
+            ])
 
             # generate samples
             mask = np.random.uniform(size=self.samples_num) > self.normal_samples_fraction
@@ -415,35 +411,15 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
             sample_start_times = mask * seizure_times + (1 - mask) * normal_times
 
             if self.prediction_data is not None:
-                fp_start_times = extract_fp_times(self.prediction_data, threshold=0.70, sfreq=self.raw.info['sfreq'])
-                fn_start_times = extract_fn_times(self.prediction_data, threshold=0.99, sfreq=self.raw.info['sfreq'])
-
-                # fp_start_times = filter_fp_times(fp_start_times, self.seizures, min_deviation=300, min_start_time=900)
-                # fn_start_times = filter_fn_times(fn_start_times, self.seizures, min_deviation=-1, min_start_time=900)
-
-                fn_num_to_pick = min(len(fn_start_times), self.samples_num // 2)
-                fp_num_to_pick = min(len(fp_start_times), self.samples_num // 2)
-                # fp_num_to_pick = min(len(fp_start_times), self.samples_num // 2, fn_num_to_pick)
-
-                fp_picked_start_times = np.random.choice(fp_start_times, size=fp_num_to_pick, replace=False)
-                fn_picked_start_times = np.random.choice(fn_start_times, size=fn_num_to_pick, replace=False)
-
-                false_preds_start_times = np.append(fp_picked_start_times, fn_picked_start_times)
-                false_preds_labels = np.append(np.zeros_like(fp_picked_start_times), np.ones_like(fn_picked_start_times))
-
-                random_permutation = np.random.permutation(len(false_preds_labels))
-                false_preds_start_times = false_preds_start_times[random_permutation]
-                false_preds_labels = false_preds_labels[random_permutation]
-
-                random_noise_in_seconds = (np.random.randint(0, high=11, size=false_preds_start_times.shape) / 5) - 1
-                false_preds_start_times += random_noise_in_seconds
-                false_preds_start_times = np.clip(false_preds_start_times, a_min=0, a_max=self.time_end - self.sample_duration - 1e-3)
+                false_preds_start_times, false_preds_labels = self._get_error_times(
+                    self.prediction_data,
+                    fp_threshold=0.70,
+                    fn_threshold=0.99,
+                    samples_num=self.samples_num,
+                )
 
                 sample_start_times = np.append(sample_start_times, false_preds_start_times)
                 targets = np.append(targets, false_preds_labels)
-
-                # sample_start_times = sample_start_times[-self.samples_num:]
-                # targets = targets[-self.samples_num:]
 
                 random_permutation = np.random.permutation(len(sample_start_times))
                 sample_start_times = sample_start_times[random_permutation]
@@ -461,36 +437,13 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
         else:
             assert self.prediction_data is not None, 'In case you want to train only on positives from prediction data you need to have this prediction data'
 
-            fn_start_times = extract_fn_times(self.prediction_data, threshold=0.90, sfreq=self.raw.info['sfreq'])
-            fp_start_times = extract_fp_times(self.prediction_data, threshold=0.90, sfreq=self.raw.info['sfreq'])
-            tp_start_times = extract_tp_times(self.prediction_data, threshold=0.90, sfreq=self.raw.info['sfreq'])
-
-            fn_num_to_pick = min(len(fn_start_times), self.samples_num // 2)
-            tp_num_to_pick = min(len(tp_start_times), self.samples_num // 2)
-            fp_num_to_pick = min(len(fp_start_times), self.samples_num - tp_num_to_pick)
-
-            fn_picked_start_times = np.random.choice(fn_start_times, size=fn_num_to_pick, replace=False)
-            fp_picked_start_times = np.random.choice(fp_start_times, size=fp_num_to_pick, replace=False)
-            tp_picked_start_times = np.random.choice(tp_start_times, size=tp_num_to_pick, replace=False)
-
-            positive_preds_start_times = np.append(fp_picked_start_times, tp_picked_start_times)
-            positive_preds_targets = np.append(np.zeros_like(fp_picked_start_times), np.ones_like(tp_picked_start_times))
-
-            positive_preds_start_times = np.append(positive_preds_start_times, fn_picked_start_times)
-            positive_preds_targets = np.append(positive_preds_targets, np.ones_like(fn_picked_start_times))
-
-            random_permutation = np.random.permutation(len(positive_preds_targets))
-            positive_preds_start_times = positive_preds_start_times[random_permutation]
-            positive_preds_targets = positive_preds_targets[random_permutation]
-
-            # Add +-1 sec noise
-            # random_noise_in_seconds = (np.random.randint(0, high=11, size=positive_preds_start_times.shape) / 5) - 1
-            random_noise_in_seconds = 2 * np.random.rand(*positive_preds_start_times.shape) - 1
-            positive_preds_start_times += random_noise_in_seconds
-            positive_preds_start_times = np.clip(positive_preds_start_times, a_min=0, a_max=self.time_end - self.sample_duration - 1e-3)
-
-            sample_start_times = positive_preds_start_times
-            targets = positive_preds_targets
+            sample_start_times, targets = self._get_positive_times(
+                self.prediction_data,
+                fp_threshold=0.90,
+                fn_threshold=0.90,
+                tp_threshold=0.90,
+                samples_num=self.samples_num
+            )
 
             # random_permutation = np.random.permutation(len(sample_start_times))
             # sample_start_times = sample_start_times[random_permutation]
@@ -503,12 +456,71 @@ class SubjectRandomDataset(torch.utils.data.Dataset):
 
             raw_samples, time_idxs_start, time_idxs_end = generate_raw_samples(self.raw, sample_start_times, self.sample_duration)
 
-            # print()
-            # print(self.eeg_file_path, list(sample_start_times))
-            # print()
             mask = targets.astype(bool)
 
             return mask, sample_start_times, targets, raw_samples, time_idxs_start, time_idxs_end, times_to_closest_seizure
+
+    def _get_error_times(self, prediction_data, fp_threshold, fn_threshold, samples_num):
+        assert prediction_data is not None
+
+        fp_start_times = extract_fp_times(prediction_data, threshold=fp_threshold, sfreq=self.raw.info['sfreq'])
+        fn_start_times = extract_fn_times(prediction_data, threshold=fn_threshold, sfreq=self.raw.info['sfreq'])
+
+        # fp_start_times = filter_fp_times(fp_start_times, self.seizures, min_deviation=300, min_start_time=900)
+        # fn_start_times = filter_fn_times(fn_start_times, self.seizures, min_deviation=-1, min_start_time=900)
+
+        fn_num_to_pick = min(len(fn_start_times), samples_num // 2)
+        fp_num_to_pick = min(len(fp_start_times), samples_num // 2)
+        # fp_num_to_pick = min(len(fp_start_times), self.samples_num // 2, fn_num_to_pick)
+
+        fp_picked_start_times = np.random.choice(fp_start_times, size=fp_num_to_pick, replace=False)
+        fn_picked_start_times = np.random.choice(fn_start_times, size=fn_num_to_pick, replace=False)
+
+        false_preds_start_times = np.append(fp_picked_start_times, fn_picked_start_times)
+        false_preds_labels = np.append(np.zeros_like(fp_picked_start_times), np.ones_like(fn_picked_start_times))
+
+        random_permutation = np.random.permutation(len(false_preds_labels))
+        false_preds_start_times = false_preds_start_times[random_permutation]
+        false_preds_labels = false_preds_labels[random_permutation]
+
+        random_noise_in_seconds = (np.random.randint(0, high=11, size=false_preds_start_times.shape) / 5) - 1
+        false_preds_start_times += random_noise_in_seconds
+        false_preds_start_times = np.clip(false_preds_start_times, a_min=0, a_max=self.time_end - self.sample_duration - 1e-3)
+
+        return false_preds_start_times, false_preds_labels
+
+    def _get_positive_times(self, prediction_data, fp_threshold, fn_threshold, tp_threshold, samples_num):
+        assert prediction_data is not None
+
+        fn_start_times = extract_fn_times(prediction_data, threshold=fp_threshold, sfreq=self.raw.info['sfreq'])
+        fp_start_times = extract_fp_times(prediction_data, threshold=fn_threshold, sfreq=self.raw.info['sfreq'])
+        tp_start_times = extract_tp_times(prediction_data, threshold=tp_threshold, sfreq=self.raw.info['sfreq'])
+
+        fn_num_to_pick = min(len(fn_start_times), samples_num // 2)
+        tp_num_to_pick = min(len(tp_start_times), samples_num // 2)
+        fp_num_to_pick = min(len(fp_start_times), samples_num - tp_num_to_pick)
+
+        fn_picked_start_times = np.random.choice(fn_start_times, size=fn_num_to_pick, replace=False)
+        fp_picked_start_times = np.random.choice(fp_start_times, size=fp_num_to_pick, replace=False)
+        tp_picked_start_times = np.random.choice(tp_start_times, size=tp_num_to_pick, replace=False)
+
+        positive_preds_start_times = np.append(fp_picked_start_times, tp_picked_start_times)
+        positive_preds_targets = np.append(np.zeros_like(fp_picked_start_times), np.ones_like(tp_picked_start_times))
+
+        positive_preds_start_times = np.append(positive_preds_start_times, fn_picked_start_times)
+        positive_preds_targets = np.append(positive_preds_targets, np.ones_like(fn_picked_start_times))
+
+        random_permutation = np.random.permutation(len(positive_preds_targets))
+        positive_preds_start_times = positive_preds_start_times[random_permutation]
+        positive_preds_targets = positive_preds_targets[random_permutation]
+
+        # Add +-1 sec noise
+        # random_noise_in_seconds = (np.random.randint(0, high=11, size=positive_preds_start_times.shape) / 5) - 1
+        random_noise_in_seconds = 2 * np.random.rand(*positive_preds_start_times.shape) - 1
+        positive_preds_start_times += random_noise_in_seconds
+        positive_preds_start_times = np.clip(positive_preds_start_times, a_min=0, a_max=self.time_end - self.sample_duration - 1e-3)
+
+        return positive_preds_start_times, positive_preds_targets
 
     def renew_data(self):
         (
