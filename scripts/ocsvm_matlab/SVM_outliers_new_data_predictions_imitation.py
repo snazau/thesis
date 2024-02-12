@@ -37,7 +37,7 @@ def get_metrics_for_threshold(threshold_predictions_dir, dilation_times, sfreq=1
 
     subject_file_names = get_filenames()
 
-    prediction_data_dir_name = 'npy_preds_trimmed' + ('' if not save_json_targets else '_v2_targets')
+    prediction_data_dir_name = f'npy_preds_trimmed_dilation={dilation_times}' + ('' if not save_json_targets else '_v2_targets')
     prediction_data_dir = os.path.join(threshold_predictions_dir, prediction_data_dir_name)
     os.makedirs(prediction_data_dir, exist_ok=True)
     os.makedirs(os.path.join(prediction_data_dir, 'data1'), exist_ok=True)
