@@ -80,6 +80,7 @@ def calc_segments_metrics(
         normal_segments_pred,
         intersection_part_threshold,
         record_duration,  # record duration in hours
+        seizure_segments_true_dilation=60 * 1,  # T param, how much to dilate true seizures
 ):
     assert 0 < intersection_part_threshold <= 1
 
@@ -90,10 +91,25 @@ def calc_segments_metrics(
     for seizure_segment_pred in seizure_segments_pred:
         find_tp = False
         for seizure_true_idx, seizure_segment_true in enumerate(seizure_segments_true):
-            overlapping_distance = overlapping_segment(seizure_segment_true, seizure_segment_pred)
-            true_distance = seizure_segment_true['end'] - seizure_segment_true['start']
-            # if overlapping_distance / true_distance > intersection_part_threshold:
-            if overlapping_distance / true_distance > intersection_part_threshold and seizures_true_used_mask[seizure_true_idx] == 0:
+            # overlapping_distance = overlapping_segment(seizure_segment_true, seizure_segment_pred)
+            # true_distance = seizure_segment_true['end'] - seizure_segment_true['start']
+            # # if overlapping_distance / true_distance > intersection_part_threshold:
+            # if overlapping_distance / true_distance > intersection_part_threshold and seizures_true_used_mask[seizure_true_idx] == 0:
+            #     tp_num += 1
+            #     find_tp = True
+            #     seizures_true_used_mask[seizure_true_idx] += 1
+            #
+            #     pred_distance = seizure_segment_pred['end'] - seizure_segment_pred['start']
+            #     long_postivies += 1 if pred_distance > 500 else 0
+            #     break
+
+            seizure_segment_true_dilated = {
+                'start': seizure_segment_true['start'] - seizure_segments_true_dilation,
+                'end': seizure_segment_true['end'] + seizure_segments_true_dilation,
+            }
+            if (seizure_segment_true_dilated['start'] <= seizure_segment_pred['end'] <= seizure_segment_true_dilated['end']) and \
+                    (seizure_segment_true_dilated['start'] <= seizure_segment_pred['start'] <= seizure_segment_true_dilated['end']) and \
+                    seizures_true_used_mask[seizure_true_idx] == 0:
                 tp_num += 1
                 find_tp = True
                 seizures_true_used_mask[seizure_true_idx] += 1
