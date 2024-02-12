@@ -132,6 +132,7 @@ def get_segments_from_predictions(experiment_dir, subject_keys, threshold, filte
             'seizures_pred': seizure_segments_pred,
             'seizures':  prediction_data['subject_seizures'],
             'normals':  normal_segments,
+            'record_duration': time_end / 3600,  # duration in hours
         }
         # break
 
@@ -391,7 +392,7 @@ def visualize_predicted_segments(subject_eeg_path, seizure_segments_true, seizur
     del raw
 
 
-def get_segment_metrics(experiment_dir, subject_keys, intersection_part_threshold, threshold, filter_method, k_size, verbose=1):
+def get_segment_metrics(experiment_dir, subject_keys, seizure_segments_true_dilation, intersection_part_threshold, threshold, filter_method, k_size, verbose=1):
     subject_key_to_pred_segments = get_segments_from_predictions(
         experiment_dir,
         subject_keys,
@@ -413,6 +414,7 @@ def get_segment_metrics(experiment_dir, subject_keys, intersection_part_threshol
             segments_dict['normals_pred'],
             intersection_part_threshold=intersection_part_threshold,
             record_duration=segments_dict['record_duration'],
+            seizure_segments_true_dilation=seizure_segments_true_dilation,
         )
         metric_meter.update(metrics_dict)
         if verbose > 1:
@@ -452,7 +454,7 @@ def get_segment_metrics(experiment_dir, subject_keys, intersection_part_threshol
     return metric_meter
 
 
-def get_best_threshold_for_segment_merging(experiment_dir, subject_keys, intersection_part_threshold, min_recall_threshold, filter_method, k_size, verbose=1):
+def get_best_threshold_for_segment_merging(experiment_dir, subject_keys, seizure_segments_true_dilation, intersection_part_threshold, min_recall_threshold, filter_method, k_size, verbose=1):
     assert 0 < min_recall_threshold <= 1
 
     best_avg_recall = -1
@@ -461,7 +463,7 @@ def get_best_threshold_for_segment_merging(experiment_dir, subject_keys, interse
     best_metric_meter = None
     threshold_range = list(np.round(np.arange(0.05, 1, 0.05), 2))
     for threshold_idx, threshold in enumerate(threshold_range):
-        metric_meter = get_segment_metrics(experiment_dir, subject_keys, intersection_part_threshold, threshold, filter_method, k_size, verbose)
+        metric_meter = get_segment_metrics(experiment_dir, subject_keys, seizure_segments_true_dilation, intersection_part_threshold, threshold, filter_method, k_size, verbose)
 
         if metric_meter.meters['recall_score'].avg >= min(best_avg_recall, min_recall_threshold) and metric_meter.meters['precision_score'].avg > best_avg_precision:
             best_avg_recall = metric_meter.meters['recall_score'].avg
@@ -474,6 +476,251 @@ def get_best_threshold_for_segment_merging(experiment_dir, subject_keys, interse
             print(f't = {threshold:3.2f} f1 = {metric_meter.meters["f1_score"].avg:.4f} p = {metric_meter.meters["precision_score"].avg:.4f} r = {metric_meter.meters["recall_score"].avg:.4f} long_pos = {metric_meter.meters["long_postivies"].sum:7.4f} best_t = {best_threshold:3.2f}')
 
     return best_threshold, best_metric_meter
+
+
+def print_tables(
+        best_threshold_10sec_val,
+        metric_meter_10sec_train,
+        metric_meter_10sec_val,
+        metric_meter_10sec_test,
+        best_threshold_segment_merging_val,
+        metric_meter_segment_merging_train,
+        metric_meter_segment_merging_val,
+        metric_meter_segment_merging_test,
+):
+    # 10 sec long precision, recall, f1
+    print(f'10sec long segments t = {best_threshold_10sec_val:3.2f}')
+    print(f'{"":24} {"r_macro":10} {"p_macro":10} {"f1_macro":10} {"r_micro":10} {"p_micro":10} {"f1_micro":10}')
+    print(
+        f'{"test":20} '
+        f'{metric_meter_10sec_test.meters["recall_score"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["precision_score"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["f1_score"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["recall_score_micro"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["precision_score_micro"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["f1_score_micro"].avg:10.4f} '
+    )
+
+    print(
+        f'{"train":20} '
+        f'{metric_meter_10sec_train.meters["recall_score"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["precision_score"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["f1_score"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["recall_score_micro"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["precision_score_micro"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["f1_score_micro"].avg:10.4f} '
+    )
+
+    print(
+        f'{"val":20} '
+        f'{metric_meter_10sec_val.meters["recall_score"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["precision_score"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["f1_score"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["recall_score_micro"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["precision_score_micro"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["f1_score_micro"].avg:10.4f} '
+    )
+
+    print()
+
+    # 10 sec long FN, FP, TP
+    print(f'10sec long segments t = {best_threshold_10sec_val:3.2f}')
+    print(f'{"":21} {"FN_per_h_macro":15} {"FP_per_h_macro":15} {"TP_per_h_macro":15} {"TN_per_h_macro":15} {"FN_per_h_micro":15} {"FP_per_h_micro":15} {"TP_per_h_micro":15} {"TN_per_h_micro":15}')
+    print(
+        f'{"test":20} '
+        f'{metric_meter_10sec_test.meters["fn_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_test.meters["fp_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_test.meters["tp_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_test.meters["tn_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_test.meters["fn_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_test.meters["fp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_test.meters["tp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_test.meters["tn_per_h_micro"].avg:15.4f} '
+    )
+
+    print(
+        f'{"train":20} '
+        f'{metric_meter_10sec_train.meters["fn_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_train.meters["fp_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_train.meters["tp_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_train.meters["tn_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_train.meters["fn_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_train.meters["fp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_train.meters["tp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_train.meters["tn_per_h_micro"].avg:15.4f} '
+    )
+
+    print(
+        f'{"val":20} '
+        f'{metric_meter_10sec_val.meters["fn_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_val.meters["fp_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_val.meters["tp_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_val.meters["tn_per_h"].avg:15.4f} '
+        f'{metric_meter_10sec_val.meters["fn_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_val.meters["fp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_val.meters["tp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_10sec_val.meters["tn_per_h_micro"].avg:15.4f} '
+    )
+
+    print()
+
+    # 10 sec long FN_avg, FP_avg, TP_avg, FN_avg, FP_avg, TP_avg
+    print(f'10sec long segments t = {best_threshold_10sec_val:3.2f}')
+    print(f'{"":24} {"FN_avg":10} {"FP_avg":10} {"TP_avg":10} {"TN_avg":10} {"FN_sum":10} {"FP_sum":10} {"TP_sum":10} {"TN_sum":10}')
+    print(
+        f'{"test":20} '
+        f'{metric_meter_10sec_test.meters["fn_num"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["fp_num"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["tp_num"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["tn_num"].avg:10.4f} '
+        f'{metric_meter_10sec_test.meters["fn_num"].sum:10} '
+        f'{metric_meter_10sec_test.meters["fp_num"].sum:10} '
+        f'{metric_meter_10sec_test.meters["tp_num"].sum:10} '
+        f'{metric_meter_10sec_test.meters["tn_num"].sum:10} '
+    )
+
+    print(
+        f'{"train":20} '
+        f'{metric_meter_10sec_train.meters["fn_num"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["fp_num"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["tp_num"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["tn_num"].avg:10.4f} '
+        f'{metric_meter_10sec_train.meters["fn_num"].sum:10} '
+        f'{metric_meter_10sec_train.meters["fp_num"].sum:10} '
+        f'{metric_meter_10sec_train.meters["tp_num"].sum:10} '
+        f'{metric_meter_10sec_train.meters["tn_num"].sum:10} '
+    )
+
+    print(
+        f'{"val":20} '
+        f'{metric_meter_10sec_val.meters["fn_num"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["fp_num"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["tp_num"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["tn_num"].avg:10.4f} '
+        f'{metric_meter_10sec_val.meters["fn_num"].sum:10} '
+        f'{metric_meter_10sec_val.meters["fp_num"].sum:10} '
+        f'{metric_meter_10sec_val.meters["tp_num"].sum:10} '
+        f'{metric_meter_10sec_val.meters["tn_num"].sum:10} '
+    )
+
+    print()
+
+    # Arbitrary long precision, recall, f1
+    print(f'Arbitrary long segments t = {best_threshold_segment_merging_val:3.2f}')
+    print(f'{"":24} {"r_macro":10} {"p_macro":10} {"f1_macro":10} {"r_micro":10} {"p_micro":10} {"f1_micro":10}')
+    print(
+        f'{"test":20} '
+        f'{metric_meter_segment_merging_test.meters["recall_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["precision_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["f1_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["recall_score_micro"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["precision_score_micro"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["f1_score_micro"].avg:10.4f} '
+    )
+
+    print(
+        f'{"train":20} '
+        f'{metric_meter_segment_merging_train.meters["recall_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["precision_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["f1_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["recall_score_micro"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["precision_score_micro"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["f1_score_micro"].avg:10.4f} '
+    )
+
+    print(
+        f'{"val":20} '
+        f'{metric_meter_segment_merging_val.meters["recall_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["precision_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["f1_score"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["recall_score_micro"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["precision_score_micro"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["f1_score_micro"].avg:10.4f} '
+    )
+
+    print()
+
+    # Arbitrary long FN, FP, TP
+    print(f'Arbitrary long segments t = {best_threshold_segment_merging_val:3.2f}')
+    print(f'{"":21} {"FN_per_h_macro":15} {"FP_per_h_macro":15} {"TP_per_h_macro":15} {"TN_per_h_macro":15} {"FN_per_h_micro":15} {"FP_per_h_micro":15} {"TP_per_h_micro":15} {"TN_per_h_micro":15}')
+    print(
+        f'{"test":20} '
+        f'{metric_meter_segment_merging_test.meters["fn_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_test.meters["fp_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_test.meters["tp_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_test.meters["tn_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_test.meters["fn_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_test.meters["fp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_test.meters["tp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_test.meters["tn_per_h_micro"].avg:15.4f} '
+    )
+
+    print(
+        f'{"train":20} '
+        f'{metric_meter_segment_merging_train.meters["fn_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_train.meters["fp_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_train.meters["tp_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_train.meters["tn_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_train.meters["fn_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_train.meters["fp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_train.meters["tp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_train.meters["tn_per_h_micro"].avg:15.4f} '
+    )
+
+    print(
+        f'{"val":20} '
+        f'{metric_meter_segment_merging_val.meters["fn_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_val.meters["fp_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_val.meters["tp_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_val.meters["tn_per_h"].avg:15.4f} '
+        f'{metric_meter_segment_merging_val.meters["fn_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_val.meters["fp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_val.meters["tp_per_h_micro"].avg:15.4f} '
+        f'{metric_meter_segment_merging_val.meters["tn_per_h_micro"].avg:15.4f} '
+    )
+
+    print()
+
+    # Arbitrary long FN_avg, FP_avg, TP_avg, FN_avg, FP_avg, TP_avg
+    print(f'Arbitrary long segments t = {best_threshold_segment_merging_val:3.2f}')
+    print(f'{"":24} {"FN_avg":10} {"FP_avg":10} {"TP_avg":10} {"TN_avg":10} {"FN_sum":10} {"FP_sum":10} {"TP_sum":10} {"TN_sum":10}')
+    print(
+        f'{"test":20} '
+        f'{metric_meter_segment_merging_test.meters["fn_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["fp_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["tp_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["tn_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_test.meters["fn_num"].sum:10} '
+        f'{metric_meter_segment_merging_test.meters["fp_num"].sum:10} '
+        f'{metric_meter_segment_merging_test.meters["tp_num"].sum:10} '
+        f'{metric_meter_segment_merging_test.meters["tn_num"].sum:10} '
+    )
+
+    print(
+        f'{"train":20} '
+        f'{metric_meter_segment_merging_train.meters["fn_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["fp_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["tp_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["tn_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_train.meters["fn_num"].sum:10} '
+        f'{metric_meter_segment_merging_train.meters["fp_num"].sum:10} '
+        f'{metric_meter_segment_merging_train.meters["tp_num"].sum:10} '
+        f'{metric_meter_segment_merging_train.meters["tn_num"].sum:10} '
+    )
+
+    print(
+        f'{"val":20} '
+        f'{metric_meter_segment_merging_val.meters["fn_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["fp_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["tp_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["tn_num"].avg:10.4f} '
+        f'{metric_meter_segment_merging_val.meters["fn_num"].sum:10} '
+        f'{metric_meter_segment_merging_val.meters["fp_num"].sum:10} '
+        f'{metric_meter_segment_merging_val.meters["tp_num"].sum:10} '
+        f'{metric_meter_segment_merging_val.meters["tn_num"].sum:10} '
+    )
+
+    print()
 
 
 if __name__ == '__main__':
@@ -497,6 +744,7 @@ if __name__ == '__main__':
     verbose = 1
     min_recall_threshold = 0.9
     intersection_part_threshold = 0.51
+    seizure_segments_true_dilation = 60 * 3
 
     if filter:
         filter_method = 'median'
@@ -506,7 +754,7 @@ if __name__ == '__main__':
         k_size = -1
 
     print(experiment_name)
-    print(f'filter={filter_method} k={k_size} exclude_16={exclude_16}')
+    print(f'filter={filter_method} k={k_size} exclude_16={exclude_16} seizure_segments_true_dilation={seizure_segments_true_dilation} intersection_part_threshold={intersection_part_threshold} min_recall_threshold={min_recall_threshold}')
     print()
 
     # evaluating val to find best_threshold for 10sec preds
@@ -518,62 +766,55 @@ if __name__ == '__main__':
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
     from scripts.find_threshold import get_best_threshold, get_metrics
-    best_threshold, best_metric_meter = get_best_threshold(
+    best_threshold_10sec_val, metric_meter_10sec_val = get_best_threshold(
         experiment_dir=experiment_dir,
         subject_keys=subject_keys,
         filter_method=filter_method,
         k_size=k_size,
         verbose=verbose,
     )
-    print(f'val best_threshold = {best_threshold}')
-    print(f'best_metric_meter:\n{best_metric_meter}')
+    print(f'val best_threshold = {best_threshold_10sec_val}')
+    print(f'metric_meter_10sec_val:\n{metric_meter_10sec_val}')
     print()
 
-    # evaluating test performance with best_threshold for 10sec preds
-    print('evaluating test performance with best_threshold for 10sec preds')
+    # evaluating test performance with best_threshold_10sec_val for 10sec preds
+    print('evaluating test performance with best_threshold_10sec_val for 10sec preds')
     subject_keys = data_split.get_subject_keys_test()
     subject_keys_exclude = data_split.get_subject_keys_exclude_16()
     if exclude_16:
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
-    # metric_meter = get_metrics(
-    #     experiment_dir=experiment_dir,
-    #     subject_keys=subject_keys,
-    #     threshold=best_threshold,
-    #     filter_method=filter_method,
-    #     k_size=k_size,
-    #     verbose=verbose,
-    # )
-    # print(f'test threshold = {best_threshold:3.2f} f1_score = {metric_meter.meters["f1_score"].avg:.4f} precision_score = {metric_meter.meters["precision_score"].avg:.4f} recall_score = {metric_meter.meters["recall_score"].avg:.4f} best_threshold = {best_threshold:3.2f} best_f1_score = {best_metric_meter.meters["f1_score"].avg:.4f}')
-    # print()
-
-    best_threshold, best_metric_meter = get_best_threshold(
+    metric_meter_10sec_test = get_metrics(
         experiment_dir=experiment_dir,
         subject_keys=subject_keys,
+        threshold=best_threshold_10sec_val,
         filter_method=filter_method,
         k_size=k_size,
         verbose=verbose,
     )
-    print(f'test best_threshold = {best_threshold}')
-    print(f'best_metric_meter:\n{best_metric_meter}')
+
+    print(f'test threshold = {best_threshold_10sec_val}')
+    print(f'metric_meter_10sec_test:\n{metric_meter_10sec_test}')
     print()
 
-    # evaluating test performance with best_threshold for 10sec preds
-    print('evaluating train performance with best_threshold for 10sec preds')
+    # evaluating train performance with best_threshold_10sec_val for 10sec preds
+    print('evaluating train performance with best_threshold_10sec_val for 10sec preds')
     subject_keys = data_split.get_subject_keys_train()
     subject_keys_exclude = data_split.get_subject_keys_exclude_16()
     if exclude_16:
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
-    best_threshold, best_metric_meter = get_best_threshold(
+    metric_meter_10sec_train = get_metrics(
         experiment_dir=experiment_dir,
         subject_keys=subject_keys,
+        threshold=best_threshold_10sec_val,
         filter_method=filter_method,
         k_size=k_size,
         verbose=verbose,
     )
-    print(f'train best_threshold = {best_threshold}')
-    print(f'best_metric_meter:\n{best_metric_meter}')
+
+    print(f'train threshold = {best_threshold_10sec_val}')
+    print(f'metric_meter_10sec_train:\n{metric_meter_10sec_train}')
     print()
 
     # evaluating val to find best_threshold_segment for merging of 10sec preds into arbitrary long segments
@@ -582,59 +823,75 @@ if __name__ == '__main__':
     if exclude_16:
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
-    best_threshold_segment, best_metric_meter_segment = get_best_threshold_for_segment_merging(
+    best_threshold_segment_merging_val, metric_meter_segment_merging_val = get_best_threshold_for_segment_merging(
         experiment_dir=experiment_dir,
         subject_keys=subject_keys,
+        seizure_segments_true_dilation=seizure_segments_true_dilation,
         intersection_part_threshold=intersection_part_threshold,
         min_recall_threshold=min_recall_threshold,
         filter_method=filter_method,
         k_size=k_size,
         verbose=verbose,
     )
-    print(f'val best_threshold_segment = {best_threshold_segment}')
-    print(f'best_metric_meter_segment:\n{best_metric_meter_segment}')
+    print(f'val best_threshold_segment_merging_val = {best_threshold_segment_merging_val}')
+    print(f'metric_meter_segment_merging_val:\n{metric_meter_segment_merging_val}')
 
-    # evaluating test performance with arbitrary long segments and best_threshold_segment
-    print('evaluating test performance with arbitrary long segments and best_threshold_segment')
+    # evaluating test performance with arbitrary long segments and best_threshold_segment_merging_val
+    print('evaluating test performance with arbitrary long segments and best_threshold_segment_merging_val')
     subject_keys = data_split.get_subject_keys_test()
     subject_keys_exclude = data_split.get_subject_keys_exclude_16()
     if exclude_16:
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
-    metric_meter = get_segment_metrics(
+    metric_meter_segment_merging_test = get_segment_metrics(
         experiment_dir=experiment_dir,
         subject_keys=subject_keys,
+        seizure_segments_true_dilation=seizure_segments_true_dilation,
         intersection_part_threshold=intersection_part_threshold,
-        threshold=best_threshold_segment,
+        threshold=best_threshold_segment_merging_val,
         filter_method=filter_method,
         k_size=k_size,
         verbose=verbose,
         # verbose=2,
     )
-    print(f'test t = {best_threshold_segment:3.2f} f1 = {metric_meter.meters["f1_score"].avg:.4f} p = {metric_meter.meters["precision_score"].avg:.4f} r = {metric_meter.meters["recall_score"].avg:.4f} fp = {metric_meter.meters["fp_num"].avg:7.4f} ({metric_meter.meters["fp_num"].sum:7.4f}) fn = {metric_meter.meters["fn_num"].avg:7.4f} ({metric_meter.meters["fn_num"].sum:7.4f}) tp = {metric_meter.meters["tp_num"].avg:7.4f} ({metric_meter.meters["tp_num"].sum:7.4f}) best_t = {best_threshold:3.2f} p_micro = {metric_meter.meters["precision_score_micro"].avg:.4f} r_micro = {metric_meter.meters["recall_score_micro"].avg:.4f}')
-    print(f'test t = {best_threshold_segment:3.2f} {metric_meter}')
+    print(f'test t = {best_threshold_segment_merging_val:3.2f} f1 = {metric_meter_segment_merging_test.meters["f1_score"].avg:.4f} p = {metric_meter_segment_merging_test.meters["precision_score"].avg:.4f} r = {metric_meter_segment_merging_test.meters["recall_score"].avg:.4f} fp = {metric_meter_segment_merging_test.meters["fp_num"].avg:7.4f} ({metric_meter_segment_merging_test.meters["fp_num"].sum:7.4f}) fn = {metric_meter_segment_merging_test.meters["fn_num"].avg:7.4f} ({metric_meter_segment_merging_test.meters["fn_num"].sum:7.4f}) tp = {metric_meter_segment_merging_test.meters["tp_num"].avg:7.4f} ({metric_meter_segment_merging_test.meters["tp_num"].sum:7.4f}) p_micro = {metric_meter_segment_merging_test.meters["precision_score_micro"].avg:.4f} r_micro = {metric_meter_segment_merging_test.meters["recall_score_micro"].avg:.4f}')
+    print(f'test t = {best_threshold_segment_merging_val:3.2f} {metric_meter_segment_merging_test}')
     print('\n')
 
-    # evaluating train performance with arbitrary long segments and best_threshold_segment
-    print('evaluating train performance with arbitrary long segments and best_threshold_segment')
+    # evaluating train performance with arbitrary long segments and best_threshold_segment_merging_val
+    print('evaluating train performance with arbitrary long segments and best_threshold_segment_merging_val')
     subject_keys = data_split.get_subject_keys_train()
     subject_keys_exclude = data_split.get_subject_keys_exclude_16()
     if exclude_16:
         subject_keys = [subject_key for subject_key in subject_keys if subject_key not in subject_keys_exclude]
 
-    metric_meter = get_segment_metrics(
+    metric_meter_segment_merging_train = get_segment_metrics(
         experiment_dir=experiment_dir,
         subject_keys=subject_keys,
+        seizure_segments_true_dilation=seizure_segments_true_dilation,
         intersection_part_threshold=intersection_part_threshold,
-        threshold=best_threshold_segment,
+        threshold=best_threshold_segment_merging_val,
         filter_method=filter_method,
         k_size=k_size,
         verbose=verbose,
         # verbose=2,
     )
-    print(f'train t = {best_threshold_segment:3.2f} f1 = {metric_meter.meters["f1_score"].avg:.4f} p = {metric_meter.meters["precision_score"].avg:.4f} r = {metric_meter.meters["recall_score"].avg:.4f} fp = {metric_meter.meters["fp_num"].avg:7.4f} ({metric_meter.meters["fp_num"].sum:7.4f}) fn = {metric_meter.meters["fn_num"].avg:7.4f} ({metric_meter.meters["fn_num"].sum:7.4f}) tp = {metric_meter.meters["tp_num"].avg:7.4f} ({metric_meter.meters["tp_num"].sum:7.4f}) best_t = {best_threshold:3.2f} p_micro = {metric_meter.meters["precision_score_micro"].avg:.4f} r_micro = {metric_meter.meters["recall_score_micro"].avg:.4f}')
-    print(f'train t = {best_threshold_segment:3.2f} {metric_meter}')
+    print(f'train t = {best_threshold_segment_merging_val:3.2f} f1 = {metric_meter_segment_merging_train.meters["f1_score"].avg:.4f} p = {metric_meter_segment_merging_train.meters["precision_score"].avg:.4f} r = {metric_meter_segment_merging_train.meters["recall_score"].avg:.4f} fp = {metric_meter_segment_merging_train.meters["fp_num"].avg:7.4f} ({metric_meter_segment_merging_train.meters["fp_num"].sum:7.4f}) fn = {metric_meter_segment_merging_train.meters["fn_num"].avg:7.4f} ({metric_meter_segment_merging_train.meters["fn_num"].sum:7.4f}) tp = {metric_meter_segment_merging_train.meters["tp_num"].avg:7.4f} ({metric_meter_segment_merging_train.meters["tp_num"].sum:7.4f}) p_micro = {metric_meter_segment_merging_train.meters["precision_score_micro"].avg:.4f} r_micro = {metric_meter_segment_merging_train.meters["recall_score_micro"].avg:.4f}')
+    print(f'train t = {best_threshold_segment_merging_val:3.2f} {metric_meter_segment_merging_train}')
     print('\n')
+
+    print(experiment_name)
+    print(f'filter={filter_method} k={k_size} exclude_16={exclude_16} seizure_segments_true_dilation={seizure_segments_true_dilation} intersection_part_threshold={intersection_part_threshold} min_recall_threshold={min_recall_threshold}')
+    print_tables(
+        best_threshold_10sec_val,
+        metric_meter_10sec_train,
+        metric_meter_10sec_val,
+        metric_meter_10sec_test,
+        best_threshold_segment_merging_val,
+        metric_meter_segment_merging_train,
+        metric_meter_segment_merging_val,
+        metric_meter_segment_merging_test,
+    )
 
     # visualize segments
     if visualize_segments:
@@ -657,7 +914,7 @@ if __name__ == '__main__':
         subject_key_to_pred_segments = get_segments_from_predictions(
             experiment_dir,
             subject_keys,
-            best_threshold_segment,
+            best_threshold_segment_merging_val,
             filter_method,
             k_size,
         )
