@@ -108,9 +108,9 @@ def calc_segments_metrics(
                 'end': seizure_segment_true['end'] + seizure_segments_true_dilation,
             }
             if (seizure_segment_true_dilated['start'] <= seizure_segment_pred['end'] <= seizure_segment_true_dilated['end']) and \
-                    (seizure_segment_true_dilated['start'] <= seizure_segment_pred['start'] <= seizure_segment_true_dilated['end']) and \
-                    seizures_true_used_mask[seizure_true_idx] == 0:
-                tp_num += 1
+                    (seizure_segment_true_dilated['start'] <= seizure_segment_pred['start'] <= seizure_segment_true_dilated['end']):
+                if seizures_true_used_mask[seizure_true_idx] == 0:
+                    tp_num += 1
                 find_tp = True
                 seizures_true_used_mask[seizure_true_idx] += 1
 
