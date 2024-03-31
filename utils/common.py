@@ -115,7 +115,7 @@ def calc_segments_metrics(
                 seizures_true_used_mask[seizure_true_idx] += 1
 
                 pred_distance = seizure_segment_pred['end'] - seizure_segment_pred['start']
-                long_postivies += 1 if pred_distance > 500 else 0
+                long_postivies += 1 if pred_distance > 300 else 0
                 break
 
         if not find_tp:
