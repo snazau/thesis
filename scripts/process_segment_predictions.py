@@ -60,10 +60,11 @@ def get_segments(prediction_data, threshold, filter_method='median', k_size=7, s
 
     # merge stochastic segments
     idx = 0
+    N_max_merged_segments_num = 2
     segments_wo_stochastic = list()
     while idx < len(segments):
         segment_start_idx = idx
-        while idx < len(segments) and (segments[idx]['merged_segments_num'] <= 2 or segments[idx]['seizure_segment']):
+        while idx < len(segments) and (segments[idx]['merged_segments_num'] <= N_max_merged_segments_num or segments[idx]['seizure_segment']):
             idx += 1
         segment_end_idx = idx
 
