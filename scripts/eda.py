@@ -4,31 +4,51 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
 
+import data_split
+
 
 if __name__ == '__main__':
+    exclude_16 = False
     metainfo_path = '../data/dataset_info.json'
 
     with open(metainfo_path) as f:
         dataset_info = json.load(f)
 
-    total_duration = 0
-    total_normal = 0
-    total_seizure = 0
-    total_percent = 0
-    avg_percent = 0
+    subjects_to_exclude = data_split.get_subject_keys_exclude_16() if exclude_16 else list()
+
+    total_duration, total_normal, total_seizure = 0, 0, 0
+    total_percent, avg_percent = 0, 0
 
     whole_durations = list()
+    all_record_durations = list()
+    all_break_btw_seizure = list()
+    all_seizure_nums = list()
     all_seizure_durations = list()
     data1_seizure_durations = list()
     data2_seizure_durations = list()
     for subject_key in dataset_info['subjects_info'].keys():
+        if subject_key in subjects_to_exclude:
+            continue
+
+        subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
+        all_seizure_nums.append(len(subject_seizures))
+        all_record_durations.append(dataset_info['subjects_info'][subject_key]['duration_in_seconds'])
+
+        seizure_prev = None
         subject_seizure_duration = 0
-        for seizure in dataset_info['subjects_info'][subject_key]['seizures']:
+        for seizure in subject_seizures:
             seizure_duration = seizure['end'] - seizure['start']
 
             if seizure_duration > 300:
+                all_seizure_nums[-1] = all_seizure_nums[-1] - 1
+                if all_seizure_nums[-1] == 0:
+                    del all_seizure_nums[-1]
                 print('>300', subject_key, seizure_duration, seizure)
                 continue
+
+            if seizure_prev is not None:
+                break_btw_seizure = seizure['start'] - seizure_prev['end']
+                all_break_btw_seizure.append(break_btw_seizure)
 
             subject_seizure_duration += seizure_duration
 
@@ -39,6 +59,8 @@ if __name__ == '__main__':
                 data2_seizure_durations.append(seizure_duration)
             else:
                 raise NotImplementedError
+
+            seizure_prev = seizure.copy()
 
         subject_normal_duration = dataset_info['subjects_info'][subject_key]['duration_in_seconds'] - subject_seizure_duration
         subject_total_duration = dataset_info['subjects_info'][subject_key]['duration_in_seconds']
@@ -61,10 +83,16 @@ if __name__ == '__main__':
     all_seizure_durations = np.array(all_seizure_durations)
     data1_seizure_durations = np.array(data1_seizure_durations)
     data2_seizure_durations = np.array(data2_seizure_durations)
+    all_seizure_nums = np.array(all_seizure_nums)
+    all_record_durations = np.array(all_record_durations)
+    all_break_btw_seizure = np.array(all_break_btw_seizure)
     print(f'data1_seizure stats min = {data1_seizure_durations.min()} mean = {data1_seizure_durations.mean()} max = {data1_seizure_durations.max()} std = {data1_seizure_durations.std()}')
     print(f'data2_seizure stats min = {data2_seizure_durations.min()} mean = {data2_seizure_durations.mean()} max = {data2_seizure_durations.max()} std = {data2_seizure_durations.std()}')
-    print(f'all_seizure stats min = {all_seizure_durations.min()} mean = {all_seizure_durations.mean()} max = {all_seizure_durations.max()} std = {all_seizure_durations.std()}')
-    print(f'seizure_num = {len(all_seizure_durations)}')
+    print(f'all_seizure_durations stats min = {all_seizure_durations.min()} mean = {all_seizure_durations.mean()} max = {all_seizure_durations.max()} std = {all_seizure_durations.std()}')
+    print(f'all_seizure_nums stats min = {all_seizure_nums.min()} mean = {all_seizure_nums.mean()} max = {all_seizure_nums.max()} std = {all_seizure_nums.std()}')
+    print(f'all_record_durations stats min = {all_record_durations.min() / 3600} mean = {all_record_durations.mean() / 3600} max = {all_record_durations.max() / 3600} std = {all_record_durations.std() / 3600}')
+    print(f'all_break_btw_seizure stats min = {all_break_btw_seizure.min() / 3600} mean = {all_break_btw_seizure.mean() / 3600} max = {all_break_btw_seizure.max() / 3600} std = {all_break_btw_seizure.std() / 3600}')
+    print(f'patients_num = {len(all_seizure_nums)} seizure_num = {len(all_seizure_durations)}')
 
     # log_bins = np.logspace(np.log10(50), np.log10(300), 25)
     # plt.hist([data1_seizure_durations, data2_seizure_durations], bins=log_bins, label=['data1', 'data2'])
