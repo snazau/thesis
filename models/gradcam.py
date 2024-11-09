@@ -120,12 +120,12 @@ class GradCAM(_BaseWrapper):
         gcam = F.interpolate(gcam, self.image_shape, mode="bilinear", align_corners=False)
         B, C, H, W = gcam.shape
         gcam = gcam.view(B, -1)
-        if gcam.sum() != 0:  # to prevent NaN in ouptut for gcam == zeros case
+        if gcam.sum() != 0:  # to prevent NaN in ouput for gcam == zeros case
             gcam -= gcam.min(dim=1, keepdim=True)[0]
             gcam /= gcam.max(dim=1, keepdim=True)[0]
         gcam = gcam.view(B, C, H, W)
 
-        return gcam
+        return gcam, fmaps, grads
 
 
 if __name__ == '__main__':

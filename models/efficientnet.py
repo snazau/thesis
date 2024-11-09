@@ -94,7 +94,7 @@ class EEGEfficientNetB0Raw(torch.nn.Module):
         pred_class_id = torch.tensor(0)
         gcam.backward(ids=pred_class_id)
 
-        heatmap = gcam.generate(target_layer=layer)
+        heatmap, fmaps, grads = gcam.generate(target_layer=layer)
 
         return heatmap
 
