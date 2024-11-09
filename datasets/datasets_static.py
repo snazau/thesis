@@ -144,7 +144,13 @@ def filter_fn_times(fn_start_times, seizures, min_deviation=-1, min_start_time=9
     return acceptable_fn_start_times
 
 
-def get_baseline_stats(raw_data, baseline_length_in_seconds=500, sfreq=128, freqs=np.arange(1, 40.01, 0.1)):
+def get_baseline_stats(
+        raw_data,
+        baseline_length_in_seconds=500,
+        sfreq=128,
+        freqs=np.arange(1, 40.01, 0.1),
+        return_baseline_spectrum=False,
+):
     min_time, max_time = raw_data.times.min(), raw_data.times.max()
 
     # sample_start_times = np.arange(min_time, max_time - baseline_length_in_seconds, baseline_length_in_seconds // 2)
@@ -171,7 +177,10 @@ def get_baseline_stats(raw_data, baseline_length_in_seconds=500, sfreq=128, freq
     baseline_mean = np.mean(baseline_power_spectrum[0], axis=2, keepdims=True)
     baseline_std = np.std(baseline_power_spectrum[0], axis=2, keepdims=True)
 
-    return baseline_mean, baseline_std
+    if return_baseline_spectrum:
+        return baseline_mean, baseline_std, baseline_power_spectrum[0]
+    else:
+        return baseline_mean, baseline_std
 
 
 def get_baseline_stats_raw(raw_data, baseline_length_in_seconds=500, sfreq=128, freqs=np.arange(1, 40.01, 0.1)):
@@ -813,7 +822,7 @@ class SubjectPreprocessedDataset(torch.utils.data.Dataset):
 def custom_collate_function(batch, data_type='power_spectrum', normalization=None, freqs=np.arange(1, 40.01, 0.1), sfreq=128, baseline_correction=False, log=True, transform=None):
     if data_type == 'power_spectrum':
         # wavelet (morlet) transform
-        raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)
+        raw_data = torch.cat([sample_data['data'] for sample_data in batch], dim=0)  # (B, C, T)
         power_spectrum = mne.time_frequency.tfr_array_morlet(
             raw_data.numpy(),
             sfreq=sfreq,
@@ -821,7 +830,7 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
             n_cycles=freqs,
             output='power',
             n_jobs=-1
-        )
+        )  # (B, C, F, T)
 
         if baseline_correction:
             baseline_mean = np.concatenate([sample_data['baseline_mean'] for sample_data in batch], axis=0)
@@ -834,8 +843,8 @@ def custom_collate_function(batch, data_type='power_spectrum', normalization=Non
         elif normalization == 'meanstd':
             power_spectrum = (power_spectrum - power_spectrum.mean()) / power_spectrum.std()
         elif normalization == 'cwt_meanstd':
-            cwt_mean = np.concatenate([sample_data['cwt_mean'] for sample_data in batch], axis=0)
-            cwt_std = np.concatenate([sample_data['cwt_std'] for sample_data in batch], axis=0)
+            cwt_mean = np.concatenate([sample_data['cwt_mean'] for sample_data in batch], axis=0)  # (B, C, F, 1)
+            cwt_std = np.concatenate([sample_data['cwt_std'] for sample_data in batch], axis=0)  # (B, C, F, 1)
             power_spectrum = (power_spectrum - cwt_mean) / cwt_std
 
         for sample_idx in range(power_spectrum.shape[0]):
