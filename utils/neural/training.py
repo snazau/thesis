@@ -78,37 +78,46 @@ def get_datasets(data_dir, dataset_info_path, subject_keys, prediction_data_dir,
 
     datasets_list = list()
     for subject_key in subject_keys:
-        subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
-        subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
+        try:
+            subject_seizures = dataset_info['subjects_info'][subject_key]['seizures']
+            subject_eeg_path = os.path.join(data_dir, subject_key + ('.dat' if 'data1' in subject_key else '.edf'))
 
-        prediction_data_path = None if prediction_data_dir is None else os.path.join(prediction_data_dir, subject_key + '.pickle')
-        stats_path = None if stats_dir is None else os.path.join(stats_dir, subject_key + '.npy')
-        # if not os.path.exists(prediction_data_path):
-        #     prediction_data_path = None
+            prediction_data_path = None if prediction_data_dir is None else os.path.join(prediction_data_dir, subject_key + '.pickle')
+            stats_path = None if stats_dir is None else os.path.join(stats_dir, subject_key + '.npy')
+            # if not os.path.exists(prediction_data_path):
+            #     prediction_data_path = None
 
-        if dataset_class_name == 'SubjectPreprocessedDataset':
-            subject_dataset = datasets.datasets_static.SubjectPreprocessedDataset(
-                preprocessed_dir=os.path.join(data_dir, f'{subject_key.split("/")[1]}'),
-                seizures=subject_seizures,
-                **dataset_kwargs,
-            )
-        else:
-            if hasattr(datasets.datasets_static, dataset_class_name):
-                dataset_kwargs['prediction_data_path'] = prediction_data_path
-                dataset_kwargs['stats_path'] = stats_path
-                subject_dataset = getattr(datasets.datasets_static, dataset_class_name)(
-                    subject_eeg_path,
-                    subject_seizures,
-                    **dataset_kwargs,
-                )
-            elif hasattr(datasets.datasets_recurrent, dataset_class_name):
-                subject_dataset = getattr(datasets.datasets_recurrent, dataset_class_name)(
-                    subject_eeg_path,
-                    subject_seizures,
+            if dataset_class_name == 'SubjectPreprocessedDataset':
+                subject_dataset = datasets.datasets_static.SubjectPreprocessedDataset(
+                    preprocessed_dir=os.path.join(data_dir, f'{subject_key.split("/")[1]}'),
+                    seizures=subject_seizures,
                     **dataset_kwargs,
                 )
             else:
-                raise NotImplementedError
+                if hasattr(datasets.datasets_static, dataset_class_name):
+                    dataset_kwargs['prediction_data_path'] = prediction_data_path
+                    dataset_kwargs['stats_path'] = stats_path
+                    subject_dataset = getattr(datasets.datasets_static, dataset_class_name)(
+                        subject_eeg_path,
+                        subject_seizures,
+                        **dataset_kwargs,
+                    )
+                elif hasattr(datasets.datasets_recurrent, dataset_class_name):
+                    subject_dataset = getattr(datasets.datasets_recurrent, dataset_class_name)(
+                        subject_eeg_path,
+                        subject_seizures,
+                        **dataset_kwargs,
+                    )
+                else:
+                    raise NotImplementedError
+        except Exception as e:
+            print()
+            print(f'Problem with {subject_key}')
+            print(str(e))
+            import traceback
+            print(traceback.format_exc())
+            print('KEK')
+            raise e
 
         datasets_list.append(subject_dataset)
     return datasets_list
