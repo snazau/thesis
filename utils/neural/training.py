@@ -15,6 +15,7 @@ import models.recurrent
 import models.resnet
 import models.resnet_custom
 import models.efficientnet
+import models.nfnet
 import utils.neural.mixing
 
 
@@ -44,6 +45,8 @@ def get_model(model_name, model_kwargs):
         model = models.efficientnet.EEGEfficientNetB0Spectrum(**model_kwargs)
     elif model_name == 'efficientnet_b0_1channel':
         model = models.efficientnet.EEGEfficientNetB0Raw(**model_kwargs)
+    elif model_name == 'nfnet_f0':
+        model = models.nfnet.EEGNFNetF0Spectrum(**model_kwargs)
     elif model_name == 'EEGResNetCustomRaw':
         model = models.resnet_custom.EEGResNetCustomRaw(**model_kwargs)
     elif model_name == 'CRNN':
