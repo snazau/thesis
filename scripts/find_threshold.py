@@ -102,7 +102,8 @@ def get_best_threshold(experiment_dir, subject_keys, filter_method='median', k_s
                 f'p_micro = {metric_meter.meters["precision_score_micro"].avg:.4f} '
                 f'r_micro = {metric_meter.meters["recall_score_micro"].avg:.4f} '
                 f'best_t = {best_threshold:3.2f} '
-                f'best_f1 = {best_metric_meter.meters["f1_score"].avg:.4f}')
+                f'best_f1 = {best_metric_meter.meters["f1_score"].avg:.4f}'
+            )
 
     return best_threshold, best_metric_meter
 
