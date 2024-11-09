@@ -3,13 +3,18 @@ import copy
 import torch
 from torch.nn import functional as F
 
-class CAMERAS():
+
+class CAMERAS:
     def __init__(self, model, targetLayerName, inputResolutions=None):
         self.model = model
         self.inputResolutions = inputResolutions
 
         if self.inputResolutions is None:
             self.inputResolutions = list(range(224, 1000, 100))
+
+        for i in range(len(self.inputResolutions)):
+            if isinstance(self.inputResolutions[i], int):
+                self.inputResolutions[i] = (self.inputResolutions[i], self.inputResolutions[i])
 
         self.classDict = {}
         self.probsDict = {}
@@ -36,7 +41,8 @@ class CAMERAS():
         if classOfInterest is None:
             ids = classes[:, [0]]
         else:
-            ids = torch.tensor(classOfInterest).unsqueeze(dim=0).unsqueeze(dim=0).cuda()
+            # ids = torch.tensor(classOfInterest).unsqueeze(dim=0).unsqueeze(dim=0).cuda()
+            ids = torch.tensor(classOfInterest).unsqueeze(dim=0).unsqueeze(dim=0).to(image.device)
 
         self.classDict[inputResolution] = ids.clone().detach().item()
         self.probsDict[inputResolution] = probs[0, 0].clone().detach().item()
@@ -61,8 +67,8 @@ class CAMERAS():
         for resolution in self.inputResolutions:
             if groundTruthClass == self.classDict[resolution] or self.classDict[resolution] == classOfInterest:
                 count += 1
-                upSampledFeatures = F.interpolate(self.featureDict[resolution].cuda(), (saveResolution, saveResolution), mode='bilinear', align_corners=False)
-                upSampledGradients = F.interpolate(self.gradientsDict[resolution].cuda(), (saveResolution, saveResolution), mode='bilinear', align_corners=False)
+                upSampledFeatures = F.interpolate(self.featureDict[resolution], (saveResolution[0], saveResolution[1]), mode='bilinear', align_corners=False)
+                upSampledGradients = F.interpolate(self.gradientsDict[resolution], (saveResolution[0], saveResolution[1]), mode='bilinear', align_corners=False)
 
                 if meanScaledFeatures is None:
                     meanScaledFeatures = upSampledFeatures
@@ -89,15 +95,15 @@ class CAMERAS():
         saliencyMap /= saliencyMap.max(dim=1, keepdim=True)[0]
         saliencyMap = saliencyMap.view(B, C, H, W)
 
-        saliencyMap = torch.squeeze(torch.squeeze(saliencyMap, dim=0), dim=0)
+        # saliencyMap = torch.squeeze(torch.squeeze(saliencyMap, dim=0), dim=0)
         return saliencyMap
 
     def run(self, image, classOfInterest=None):
         for index, inputResolution in enumerate(self.inputResolutions):
             if index == 0:
-                upSampledImage = image.cuda()
+                upSampledImage = image
             else:
-                upSampledImage = F.interpolate(image, (inputResolution, inputResolution), mode='bicubic', align_corners=False).cuda()
+                upSampledImage = F.interpolate(image, (inputResolution[0], inputResolution[1]), mode='bicubic', align_corners=False)
 
             self._recordActivationsAndGradients(inputResolution, upSampledImage, classOfInterest=classOfInterest)
 
@@ -125,7 +131,7 @@ if __name__ == '__main__':
         torchvision.transforms.ToTensor(),
         norm_data
     ])
-    display = torchvision.transforms.Compose([torchvision.transforms.Resize((224, 224))])
+    # display = torchvision.transforms.Compose([torchvision.transforms.Resize((224, 224))])
     tensor = preprocess(image).unsqueeze(0)
     tensor = tensor.to(device)
     print(tensor.shape)
