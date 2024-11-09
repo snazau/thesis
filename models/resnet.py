@@ -3,8 +3,12 @@ import torchvision
 
 
 class EEGResNet18Spectrum(torch.nn.Module):
-    def __init__(self, pretrained=False):
+    def __init__(self, pretrained=False, initial_bn=False):
         super().__init__()
+
+        self.initial_bn = initial_bn
+        if self.initial_bn:
+            self.bn = torch.nn.BatchNorm2d(25)
 
         self.pretrained = pretrained
         self.model = torchvision.models.resnet18(pretrained=self.pretrained)
@@ -33,7 +37,7 @@ class EEGResNet18Spectrum(torch.nn.Module):
             return hook
 
         self.model.__getattr__(layer).register_forward_hook(get_activation(layer))
-        _ = self.model(x)
+        _ = self.forward(x)
 
         features = activation[layer]  # (B, 512, H // 32, W // 32)
         return features
@@ -48,12 +52,18 @@ class EEGResNet18Spectrum(torch.nn.Module):
         return self.model.layer4[1].conv2.out_channels
 
     def forward(self, x):
+        if self.initial_bn:
+            x = self.bn(x)
         return self.model(x)
 
 
 class EEGResNet18Raw(torch.nn.Module):
-    def __init__(self, pretrained=False):
+    def __init__(self, pretrained=False, initial_bn=False):
         super().__init__()
+
+        self.initial_bn = initial_bn
+        if self.initial_bn:
+            self.bn = torch.nn.BatchNorm2d(1)
 
         self.pretrained = pretrained
         self.model = torchvision.models.resnet18(pretrained=self.pretrained)
@@ -82,7 +92,7 @@ class EEGResNet18Raw(torch.nn.Module):
             return hook
 
         self.model.__getattr__(layer).register_forward_hook(get_activation(layer))
-        _ = self.model(x)
+        _ = self.forward(x)
 
         features = activation[layer]  # (B, 512, H // 32, W // 32)
         return features
@@ -97,6 +107,8 @@ class EEGResNet18Raw(torch.nn.Module):
         return self.model.layer4[1].conv2.out_channels
 
     def forward(self, x):
+        if self.initial_bn:
+            x = self.bn(x)
         return self.model(x)
 
 
