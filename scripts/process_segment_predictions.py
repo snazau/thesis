@@ -787,7 +787,18 @@ def visualize_predicted_segments_v2(experiment_dir, subject_eeg_path, tp_segment
     torch.cuda.empty_cache()
 
 
-def get_segment_metrics(experiment_dir, subject_keys, seizure_segments_true_dilation, intersection_part_threshold, threshold, filter_method, k_size, verbose=1):
+def get_segment_metrics(
+        experiment_dir,
+        subject_keys,
+        seizure_segments_true_dilation,
+        intersection_part_threshold,
+        min_pred_duration,
+        max_pred_duration,
+        threshold,
+        filter_method,
+        k_size,
+        verbose=1,
+):
     subject_key_to_pred_segments = get_segments_from_predictions(
         experiment_dir,
         subject_keys,
@@ -835,6 +846,8 @@ def get_segment_metrics(experiment_dir, subject_keys, seizure_segments_true_dila
             intersection_part_threshold=intersection_part_threshold,
             record_duration=segments_dict['record_duration'],
             seizure_segments_true_dilation=seizure_segments_true_dilation,
+            min_pred_duration=min_pred_duration,
+            max_pred_duration=max_pred_duration,
         )
         metric_meter.update(metrics_dict)
         if verbose > 0:
@@ -875,7 +888,18 @@ def get_segment_metrics(experiment_dir, subject_keys, seizure_segments_true_dila
     return metric_meter
 
 
-def get_best_threshold_for_segment_merging(experiment_dir, subject_keys, seizure_segments_true_dilation, intersection_part_threshold, min_recall_threshold, filter_method, k_size, verbose=1):
+def get_best_threshold_for_segment_merging(
+        experiment_dir,
+        subject_keys,
+        seizure_segments_true_dilation,
+        intersection_part_threshold,
+        min_pred_duration,
+        max_pred_duration,
+        min_recall_threshold,
+        filter_method,
+        k_size,
+        verbose=1,
+):
     assert 0 < min_recall_threshold <= 1
 
     best_avg_recall = -1
@@ -884,7 +908,18 @@ def get_best_threshold_for_segment_merging(experiment_dir, subject_keys, seizure
     best_metric_meter = None
     threshold_range = list(np.round(np.arange(0.05, 1, 0.05), 2))
     for threshold_idx, threshold in enumerate(threshold_range):
-        metric_meter = get_segment_metrics(experiment_dir, subject_keys, seizure_segments_true_dilation, intersection_part_threshold, threshold, filter_method, k_size, verbose)
+        metric_meter = get_segment_metrics(
+            experiment_dir,
+            subject_keys,
+            seizure_segments_true_dilation,
+            intersection_part_threshold,
+            min_pred_duration,
+            max_pred_duration,
+            threshold,
+            filter_method,
+            k_size,
+            verbose,
+        )
 
         if metric_meter.meters['recall_score'].avg >= min(best_avg_recall, min_recall_threshold) and metric_meter.meters['precision_score'].avg > best_avg_precision:
             best_avg_recall = metric_meter.meters['recall_score'].avg
@@ -1144,40 +1179,21 @@ def print_tables(
     print()
 
 
-if __name__ == '__main__':
-    # parameters
-    # experiment_name = '20231012_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded'
-    # experiment_name = '20231005_EEGResNetCustomRaw_MixUp_TimeSeriesAug_raw_16excluded'
-    # experiment_name = '20231005_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded_wo_baseline_correction'
-    # experiment_name = '20231024_EEGResNet18Raw_MixUp_TimeSeriesAug_raw_16excluded'
-    # experiment_name = '20231025_EEGResNet18Raw_MixUp_TimeSeriesAug_raw_16excluded_wo_baseline_correction'
-    # experiment_name = 'renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug'
-    # experiment_name = 'SVM_outliers_new_data_000250_dilation=0'  # OCSVM
-    # experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'  # NN
-    experiment_name = '20231107_EEGResNet18Spectrum_Default_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NoFilt'  # NN + NN
-    # experiment_name = '20231213_EEGResNet18Spectrum_Default_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_OCSVM_positive_only_16excluded'  # NN + OCSVM
-    # experiment_name = '20231107_EEGResNet18Spectrum_Default_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NoFilt_pos_only'  # NN + NN + OCSVM
-    # experiment_name = '20240110_EEGResNet18Spectrum_Default_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NN'  # NN + NN + Noise
-    # experiment_name = '20231225_EEGResNet18Spectrum_MixUp_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NN'  # NN + NN + Noise + MixUp
-    # experiment_name = 'SVM_outliers_new_data_000250'
-    # experiment_name = 'SVM_outliers_new_data_000250_dilation=2'  # identical to SVM_outliers_new_data_000250
-    # experiment_name = '20240118_EEGResNet18Spectrum_Default_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_602020splitV1'
-    # experiment_name = '20240129_EEGResNet18Spectrum_Default_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_602020splitV2'
-    experiment_dir = os.path.join(rf'D:\Study\asp\thesis\implementation\experiments', experiment_name)
-
-    # global settings
-    split_name = 'base'
-    # split_name = '602020_v1'
-    # split_name = '602020_v2'
-    visualize_segments = True
-    exclude_16 = True
-    filter = True
-    verbose = 1
-    min_recall_threshold = 0.9
-    intersection_part_threshold = 0.51
-    seizure_segments_true_dilation = 60 * 1
-
-    if filter:
+def process(
+        experiment_name,
+        experiment_dir,
+        split_name,
+        exclude_16,
+        apply_filter,
+        seizure_segments_true_dilation,
+        intersection_part_threshold,
+        min_pred_duration,
+        max_pred_duration,
+        min_recall_threshold,
+        visualize_segments,
+        verbose,
+):
+    if apply_filter:
         filter_method = 'median'
         k_size = 7
     else:
@@ -1264,6 +1280,8 @@ if __name__ == '__main__':
         subject_keys=subject_keys,
         seizure_segments_true_dilation=seizure_segments_true_dilation,
         intersection_part_threshold=intersection_part_threshold,
+        min_pred_duration=min_pred_duration,
+        max_pred_duration=max_pred_duration,
         min_recall_threshold=min_recall_threshold,
         filter_method=filter_method,
         k_size=k_size,
@@ -1286,6 +1304,8 @@ if __name__ == '__main__':
         subject_keys=subject_keys,
         seizure_segments_true_dilation=seizure_segments_true_dilation,
         intersection_part_threshold=intersection_part_threshold,
+        min_pred_duration=min_pred_duration,
+        max_pred_duration=max_pred_duration,
         threshold=best_threshold_segment_merging_val,
         filter_method=filter_method,
         k_size=k_size,
@@ -1309,6 +1329,8 @@ if __name__ == '__main__':
         subject_keys=subject_keys,
         seizure_segments_true_dilation=seizure_segments_true_dilation,
         intersection_part_threshold=intersection_part_threshold,
+        min_pred_duration=min_pred_duration,
+        max_pred_duration=max_pred_duration,
         threshold=best_threshold_segment_merging_val,
         filter_method=filter_method,
         k_size=k_size,
@@ -1498,3 +1520,74 @@ if __name__ == '__main__':
             # exit(0)
         print('Visuazlization finished\n\n\n')
         print(f'tp_num = {tp_num} fp_num = {fp_num} fn_num = {fn_num}')
+
+    return (
+        best_threshold_10sec_val,
+        metric_meter_10sec_train,
+        metric_meter_10sec_val,
+        metric_meter_10sec_test,
+        best_threshold_segment_merging_val,
+        metric_meter_segment_merging_train,
+        metric_meter_segment_merging_val,
+        metric_meter_segment_merging_test,
+    )
+
+
+if __name__ == '__main__':
+    # parameters
+    # experiment_name = '20231012_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded'
+    # experiment_name = '20231005_EEGResNetCustomRaw_MixUp_TimeSeriesAug_raw_16excluded'
+    # experiment_name = '20231005_CRNN_EEGResNetCustomRaw_BCERecurrentLoss_16excluded_wo_baseline_correction'
+    # experiment_name = '20231024_EEGResNet18Raw_MixUp_TimeSeriesAug_raw_16excluded'
+    # experiment_name = '20231025_EEGResNet18Raw_MixUp_TimeSeriesAug_raw_16excluded_wo_baseline_correction'
+    # experiment_name = 'renset18_2nd_stage_MixUp_SpecTimeFlipEEGFlipAug'
+    # experiment_name = 'SVM_outliers_new_data_000250_dilation=0'  # OCSVM
+    experiment_name = 'renset18_all_subjects_MixUp_SpecTimeFlipEEGFlipAug'  # NN
+    # experiment_name = '20231107_EEGResNet18Spectrum_Default_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NoFilt'  # NN + NN
+    # experiment_name = '20231213_EEGResNet18Spectrum_Default_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_OCSVM_positive_only_16excluded'  # NN + OCSVM
+    # experiment_name = '20231107_EEGResNet18Spectrum_Default_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NoFilt_pos_only'  # NN + NN + OCSVM
+    # experiment_name = '20240110_EEGResNet18Spectrum_Default_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NN'  # NN + NN + Noise
+    # experiment_name = '20231225_EEGResNet18Spectrum_MixUp_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_Stage2_NN'  # NN + NN + Noise + MixUp
+    # experiment_name = 'SVM_outliers_new_data_000250'
+    # experiment_name = 'SVM_outliers_new_data_000250_dilation=2'  # identical to SVM_outliers_new_data_000250
+    # experiment_name = '20240118_EEGResNet18Spectrum_Default_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_602020splitV1'
+    # experiment_name = '20240129_EEGResNet18Spectrum_Default_NoiseBaseline_SpecTimeFlipEEGFlipAug_meanstd_norm_602020splitV2'
+    experiment_dir = os.path.join(rf'D:\Study\asp\thesis\implementation\experiments', experiment_name)
+
+    # global settings
+    split_name = 'base'
+    # split_name = '602020_v1'
+    # split_name = '602020_v2'
+    visualize_segments = False
+    exclude_16 = True
+    apply_filter = True
+    verbose = 1
+    min_recall_threshold = 0.9
+    intersection_part_threshold = 0.51
+    seizure_segments_true_dilation = 60 * 1
+    min_pred_duration = -1
+    max_pred_duration = float('inf')
+
+    (
+        best_threshold_10sec_val,
+        metric_meter_10sec_train,
+        metric_meter_10sec_val,
+        metric_meter_10sec_test,
+        best_threshold_segment_merging_val,
+        metric_meter_segment_merging_train,
+        metric_meter_segment_merging_val,
+        metric_meter_segment_merging_test,
+    ) = process(
+        experiment_name,
+        experiment_dir,
+        split_name,
+        exclude_16,
+        apply_filter,
+        seizure_segments_true_dilation,
+        intersection_part_threshold,
+        min_pred_duration,
+        max_pred_duration,
+        min_recall_threshold,
+        visualize_segments,
+        verbose,
+    )
